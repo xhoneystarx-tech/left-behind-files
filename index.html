@@ -618,6 +618,9 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
 #rove-stage{cursor:grab}
 #rove .keys{margin:0;background:rgba(0,0,0,.62);color:var(--chalk);padding:3px 10px;border-radius:4px}
 #rove .keys:empty{display:none}
+/* while the big button is showing, the hint may not reach under it: it wraps instead, and steps aside on narrow screens */
+#rove:has(#rove-act:not([hidden])) .keys{max-width:calc(50vw - 330px)}
+@media (max-width:1000px){#rove:has(#rove-act:not([hidden])) .keys{display:none}}
 #rove-list{--c:#58d7e6}
 #rove-list li.now .icon{background:rgba(88,215,230,.16);box-shadow:0 0 14px rgba(88,215,230,.45)}
 #rove-list .arrow{transition:transform .15s}
