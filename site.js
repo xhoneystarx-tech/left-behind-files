@@ -1097,7 +1097,7 @@ function init3D() {
         if (!active) return;
         const f = $('#walk-found'); paused = true;
         f.replaceChildren(el('h3', { text: s.c.name }), el('div', { class: 'stamp s-' + k, text: LBF.STATUS[k].label }),
-          el('p', { class: 'fact', text: L ? L[0] : s.c.story }),
+          (() => { const p = el('p', { class: 'fact' }); (L ? L[0] : s.c.story).split('*').forEach((t, n) => p.append(n % 2 ? el('mark', { text: t }) : t)); return p; })(),
           el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: all ? 'Hy\'s questions' : 'Keep walking', onclick: () => { f.hidden = true; paused = false; if (all) debrief(0, 0); } })));
         f.hidden = false;
       }, s.c.id === 'lcross' ? 2600 : 2000);
