@@ -241,6 +241,8 @@ body.questing main, body.questing .bar, body.questing footer{visibility:hidden}
 #walk .hud > span{font-size:var(--s-1);color:var(--smoke)}
 #walk-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 #walk-list li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font-size:var(--s0)}
+#walk-list .icon{color:var(--c);display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--c);border-radius:6px;background:rgba(255,255,255,.04)}
+#walk-list li.done .icon{opacity:.45}
 #walk-list li.done{color:var(--smoke);text-decoration:line-through}
 #walk-list .arrow{width:24px;height:24px;display:grid;place-items:center;color:var(--c);font-size:18px;text-shadow:0 0 8px var(--c)}
 #walk-list li.done .arrow{transform:none !important}
@@ -255,7 +257,7 @@ body.questing main, body.questing .bar, body.questing footer{visibility:hidden}
 #walk .keys{position:absolute;left:214px;bottom:22px;font-size:var(--s-1);color:var(--smoke)}
 #walk-exit{position:absolute;right:16px;top:16px;padding:7px 14px;font-size:var(--s-1)}
 #walk-sound{position:absolute;right:16px;top:60px;padding:7px 14px;font-size:var(--s-1)}
-#walk .hud .rocks{color:#ffd36b;font-size:var(--s0)}
+#walk .hud .rocks{color:var(--chalk);font-size:var(--s0)}
 #walk .found{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--paper);color:var(--ink);padding:22px 24px;width:min(420px,calc(100vw - 32px));display:grid;gap:12px;box-shadow:0 20px 70px rgba(0,0,0,.85)}
 #walk .found[hidden]{display:none}
 #walk .found h3{font-size:var(--s3)}
@@ -420,7 +422,6 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
   <div class="row">
     <button class="btn big" id="intro-go" hidden>Let's go</button>
     <button class="btn ghost" id="intro-voice">Hear my voice</button>
-    <button class="btn ghost" id="intro-skip">Skip intro</button>
   </div>
 </div>
 

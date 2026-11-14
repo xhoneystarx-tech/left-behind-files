@@ -998,22 +998,34 @@ function init3D() {
     box.append(soundBtn);
 
     /* Moon rocks to pick up on the way, like the Apollo crews did. They lead toward the four machines. */
-    const START = ll(8, 12, 1).normalize(), rocks = [], rockGeo = new THREE.IcosahedronGeometry(0.13, 0), glowGeo = new THREE.SphereGeometry(0.24, 12, 8);
+    const START = ll(8, 12, 1).normalize(), rocks = [], ROCK_COL = [0x4f5054, 0x77736c, 0xb4b1a8, 0x625f5b];   /* basalt, breccia, pale highland rock */
+    const rockMap = tex('moonsurf.jpg');
+    function rockShape(seed) {          /* a lumpy, angular stone: no two alike */
+      const geo = new THREE.IcosahedronGeometry(1, 1), pa = geo.attributes.position, v = new THREE.Vector3(), memo = {};
+      let sd = seed * 7919 + 13; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < pa.count; i++) {
+        v.fromBufferAttribute(pa, i); const key = v.x.toFixed(2) + v.y.toFixed(2) + v.z.toFixed(2);
+        const k = memo[key] || (memo[key] = 0.72 + rnd() * 0.5); pa.setXYZ(i, v.x * k, v.y * k * 0.72, v.z * k);
+      }
+      geo.computeVertexNormals(); return geo;
+    }
     sites.forEach((s, n) => [0.3, 0.52, 0.74].forEach((t, m) => {
       const d = START.clone().lerp(s.dir, t).normalize(), side = new THREE.Vector3().crossVectors(START, s.dir).normalize();
       d.addScaledVector(side, ((m + n) % 2 ? 1 : -1) * 0.035).normalize();
-      const g = new THREE.Group(); g.position.copy(d).multiplyScalar(R + 0.45);
-      const core = new THREE.Mesh(rockGeo, new THREE.MeshStandardMaterial({ color: 0xffd36b, emissive: 0xc77a10, roughness: 0.4, flatShading: true }));
-      const glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color: 0xffc44d, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }));
-      g.add(core, glow); scene.add(g); rocks.push({ g, d, core, glow, got: false, t: 0, ph: n * 1.7 + m });
+      const g = new THREE.Group(); g.position.copy(d).multiplyScalar(R); g.lookAt(d.clone().multiplyScalar(R * 2));
+      const size = 0.15 + ((n * 3 + m) % 4) * 0.025;
+      const core = new THREE.Mesh(rockShape(n * 3 + m + 1), new THREE.MeshStandardMaterial({ color: ROCK_COL[(n + m) % 4], map: rockMap, roughness: 1, metalness: 0, flatShading: true }));
+      core.scale.setScalar(size); core.position.z = size * 0.5; core.rotation.set(Math.PI / 2, (n * 3 + m) * 1.3, 0);
+      const glow = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.325, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false })); glow.position.z = 0.02;
+      g.add(core, glow); scene.add(g); rocks.push({ g, d, core, glow, got: false, t: 0, ph: n * 1.7 + m, size });
     }));
     const rockCount = el('span', { class: 'rocks', text: '' }); $('#walk .hud').append(rockCount);
     let rocksGot = 0;
     function rockStep(dt, can) {
       rocks.forEach(r => {
-        if (r.got) { if (r.t < 0.5) { r.t += dt; const k = r.t / 0.5; r.g.scale.setScalar(1 + k * 1.6); r.g.position.copy(r.d).multiplyScalar(R + 0.45 + k * 1.2); r.core.material.opacity = r.glow.material.opacity = 1 - k; if (k >= 1) r.g.visible = false; } return; }
-        r.core.rotation.y += dt * 2; r.core.rotation.x += dt * 1.1; r.g.position.copy(r.d).multiplyScalar(R + 0.45 + Math.sin(clock * 2.4 + r.ph) * 0.08); r.glow.scale.setScalar(1 + Math.sin(clock * 4 + r.ph) * 0.15);
-        if (can && pos.dot(r.d) > 0.9985) { r.got = true; r.t = 0; r.core.material.transparent = true; rocksGot++; rockCount.textContent = 'Moon rocks: ' + rocksGot + ' / ' + rocks.length; sfx.rock(); if (rocksGot === rocks.length) { cheer = 0; sfx.find(); } }
+        if (r.got) { if (r.t < 0.5) { r.t += dt; const k = r.t / 0.5; r.core.position.z = r.size * 0.5 + Math.sin(k * Math.PI * 0.5) * 0.9; r.core.scale.setScalar(r.size * (1 - k * k)); r.core.rotation.y += dt * 9; r.glow.material.opacity = 0.5 * (1 - k); r.glow.scale.setScalar(1 + k); if (k >= 1) r.g.visible = false; } return; }
+        r.glow.scale.setScalar(1 + Math.sin(clock * 3 + r.ph) * 0.08);
+        if (can && pos.dot(r.d) > 0.9985) { r.got = true; r.t = 0; rocksGot++; rockCount.textContent = 'Moon rocks: ' + rocksGot + ' / ' + rocks.length; sfx.rock(); if (rocksGot === rocks.length) { cheer = 0; sfx.find(); } }
       });
     }
 
@@ -1048,6 +1060,13 @@ function init3D() {
       });
     }
 
+    const svg = d => '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+    const ICONS = {
+      apollo15: svg('<path d="M3 16l11-5 5 5-11 5z"/><path d="M6.5 16.2l8-3.6M9 18.6l8-3.6M8 13.7l5 5M11.5 12.1l5 5"/><path d="M14 11l7-9" stroke-dasharray="2 2"/>'),
+      apollo17: svg('<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 14h12M9 14v-4h4l2 4M17 14V5"/><path d="M13 5h8l-4 3z"/>'),
+      surveyor3: svg('<path d="M8 11h8l1.5 4h-11z"/><path d="M7 15l-4 6M17 15l4 6M12 15v6M2 21h3M19 21h3M10.500 21h3"/><path d="M12 11V4"/><path d="M7 2l9 2-1 3-9-2z"/>'),
+      lcross: svg('<ellipse cx="12" cy="17" rx="9" ry="4"/><ellipse cx="12" cy="17.500" rx="5" ry="1.800"/><path d="M12 12V3M12 3l-2 3M12 3l2 3M5 11L3 8M19 11l2-3M8 10L7 6M16 10l1-4"/>')
+    };
     const NEED = sites.map(s => [s.c.id, TARGETS[s.c.id], s.c.status]);
     const keys = { up: 0, down: 0, left: 0, right: 0, jump: 0 };
     const pos = new THREE.Vector3(), headDir = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), right = new THREE.Vector3(), basis = new THREE.Matrix4();
@@ -1058,9 +1077,9 @@ function init3D() {
       pos.copy(START); headDir.set(0, 0, -1); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize();
       earth.position.copy(pos).multiplyScalar(R + 2).addScaledVector(headDir, 100); placeDipper(headDir, pos);      /* Earth hangs low over the horizon ahead */
       zoom = 0; got = {}; learned = []; paused = false; speed = 0; phase = 0; cheer = -1; jumpT = -1; jumpY = 0; camYaw = 0; camPitch = 0.3; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.35; if (s.flag) { s.up.remove(s.flag); s.flag = null; } if (s.fx) { (s.fx.parent || scene).remove(s.fx); s.fx = null; } (s.dust || []).forEach(d => s.up.remove(d)); s.dust = null; s.model.position.set(0, 0, 0); s.model.rotation.y = 0; });
-      rocks.forEach(r => { r.got = false; r.g.visible = true; r.g.scale.setScalar(1); r.core.material.opacity = 1; r.core.material.transparent = false; r.glow.material.opacity = 0.12; }); rocksGot = 0; rockCount.textContent = 'Moon rocks: 0 / ' + rocks.length;
+      rocks.forEach(r => { r.got = false; r.g.visible = true; r.core.scale.setScalar(r.size); r.core.position.z = r.size * 0.5; r.glow.material.opacity = 0.5; r.glow.scale.setScalar(1); }); rocksGot = 0; rockCount.textContent = 'Moon rocks: 0 / ' + rocks.length;
       const list = $('#walk-list'); list.replaceChildren(); rows = {};
-      NEED.forEach(([k, label, st]) => { const li = el('li', { class: 's-' + st }, el('span', { class: 'arrow', text: '▲' }), el('span', { text: label }), el('span', { class: 'tick', text: '' })); rows[k] = li; list.append(li); });
+      NEED.forEach(([k, label, st]) => { const ic = el('span', { class: 'icon' }); ic.innerHTML = ICONS[k]; const li = el('li', { class: 's-' + st }, ic, el('span', { text: label }), el('span', { class: 'arrow', text: '➤' })); rows[k] = li; list.append(li); });
       $('#walk-found').hidden = true;
     }
     function card(title, lines, btn, fn) {
@@ -1071,7 +1090,7 @@ function init3D() {
     function find(s) {
       s.found = true; s.beam.material.opacity = 0.08; Notebook.file(s.c.id); cheer = 0; react(s); sfx.find(); G.react('yes');
       const k = s.c.status, L = LBF.LEARN[s.c.id];
-      got[s.c.id] = 1; learned.push(s.c.id); rows[s.c.id].classList.add('done'); rows[s.c.id].querySelector('.tick').textContent = '✓';
+      got[s.c.id] = 1; learned.push(s.c.id); rows[s.c.id].classList.add('done'); rows[s.c.id].querySelector('.arrow').textContent = '✓';
       say(s.c.name + '. ' + QUIPS[k], true, { silent: true }); Voice.speak(QUIPS[k]);
       const all = NEED.every(([n]) => got[n]);
       setTimeout(() => {
@@ -1217,7 +1236,8 @@ function init3D() {
       if (can && jumpT < 0) for (const s of sites) if (!s.found && pos.dot(s.dir) > 0.9955) { find(s); break; }
       /* 11 solid drawing: the figure stands on the ground with its own up, right and forward */
       basis.makeBasis(right, pos, headDir); rig.quaternion.setFromRotationMatrix(basis); rig.position.copy(pos).multiplyScalar(R);
-      sites.forEach(s => { if (s.found) return; tmp.copy(s.dir).addScaledVector(pos, -s.dir.dot(pos)); rows[s.c.id].querySelector('.arrow').style.transform = 'rotate(' + Math.atan2(-tmp.dot(right), tmp.dot(headDir)) + 'rad)'; });
+      { const cf = tmp2.copy(headDir).applyAxisAngle(pos, camYaw), cl = new THREE.Vector3().crossVectors(pos, cf);     /* pointers follow the screen: up means straight ahead */
+        sites.forEach(s => { if (s.found) return; tmp.copy(s.dir).addScaledVector(pos, -s.dir.dot(pos)); rows[s.c.id].querySelector('.arrow').style.transform = 'rotate(' + (Math.atan2(-tmp.dot(cl), tmp.dot(cf)) - Math.PI / 2) + 'rad)'; }); }
       skyStep(dt); rockStep(dt, can); reactStep(dt);
       sites.forEach(s => { s.ring.scale.setScalar(1 + Math.sin(clock * 3 + s.dir.x * 9) * 0.06); });
       /* 3 staging: fly in from above, then hold the astronaut in clear silhouette against the black sky.
@@ -1616,8 +1636,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat();
 /* ───────────────────────── Intro: meet Hy before anything else ───────────────────────── */
 (function () {
   const box = $('#intro'), v = $('#intro-v'), line = $('#intro-line'), M = window.LBF_MEDIA || {};
-  let seen = false; try { seen = sessionStorage.getItem('lbf-intro') === '1'; } catch (_) {}
-  if (seen || RM || !M.appear) return;
+  if (!M.appear) return;                       /* the intro always plays: there is no way to skip it */
   const LINES = ["Hi! I'm Hy.", "I'm a hydrogen atom. And a detective.", "NASA left robots, cars and mirrors on the Moon and Mars.", "Nobody brought them home.", "Want to help me find them?"];
   const CUES = [0, 1.6, 4.7, 9.1, 10.75];          /* when each line starts in audio/intro.mp3 */
   let over = false, audio = null, timers = [];
@@ -1626,7 +1645,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat();
   line.textContent = 'Someone wants to meet you.';
   const go = $('#intro-go'), meet = $('#intro-voice');
   meet.textContent = 'Meet Hy'; meet.className = 'btn big'; go.hidden = true;
-  function finish() { $('#intro-go').hidden = false; $('#intro-skip').hidden = true; v.pause(); }
+  function finish() { $('#intro-go').hidden = false; v.pause(); }
   function run(withSound) {
     meet.hidden = true;
     v.src = M.appear; v.loop = false; v.play().catch(() => {});
@@ -1647,7 +1666,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat();
     G.back(); say(SAY.top, true);
   }
   go.addEventListener('click', done);
-  $('#intro-skip').addEventListener('click', done);
   meet.addEventListener('click', () => {
     Voice.set(true); const b = $('#sound'); b.setAttribute('aria-pressed', 'true'); b.textContent = 'Voice on'; $('#bubble-voice').hidden = true;
     run(true);
