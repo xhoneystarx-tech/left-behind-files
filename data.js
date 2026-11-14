@@ -269,6 +269,7 @@ LBF.MODELS = {
   mer:       { name: "Spirit and Opportunity", file: "mer.glb",    note: "Twin rovers the size of a golf cart. The flat deck is all solar panel. This is NASA's simplified model.", cases: ["spirit","opportunity"] },
   insight:   { name: "InSight lander",      file: "insight.glb",   note: "The two round solar panels opened like fans. The arm lifted the quake detector onto the ground.", cases: ["insight"] },
   percy:     { name: "Perseverance rover",  file: "percy.glb",     note: "Car-sized, with six wheels and a mast full of cameras. The drill is on the end of the arm.", cases: ["perseverance"] },
+  curio:     { name: "Curiosity rover",     glb: "assets/curio.glb", note: "Car-sized, with a nuclear battery at the back. The drill is on the arm, and a whole lab is inside the body.", cases: ["curiosity"] },
   ingenuity: { name: "Ingenuity helicopter", file: "ingenuity.glb", note: "Two rotors, one above the other, spinning in opposite directions. The whole thing weighs 1.8 kg.", cases: ["ingenuity"] }
 };
 
@@ -341,7 +342,7 @@ LBF.SOURCES = [
     ["NASA: 25 years of continuous robotic Mars exploration", "https://www.nasa.gov/history/25-years-of-continuous-robotic-mars-exploration-from-pathfinder-to-perseverance"],
     ["JPL: Viking Lander mission", "https://pds-imaging.jpl.nasa.gov/portal/vikingl_mission.html"] ] },
   { group: "3D models and maps", items: [
-    ["NASA 3D Resources: all six spacecraft models, the Mars map and the star map", "https://github.com/nasa/NASA-3D-Resources"],
+    ["NASA 3D Resources: the spacecraft models, the Mars map and the star map", "https://github.com/nasa/NASA-3D-Resources"],
     ["Moon map: three.js example texture (moon_1024.jpg)", "https://github.com/mrdoob/three.js/tree/dev/examples/textures/planets"],
     ["NASA SVS: CGI Moon Kit (the higher-quality NASA Moon map)", "https://svs.gsfc.nasa.gov/4720"] ] },
   { group: "Cross-checks outside NASA", items: [
@@ -381,8 +382,8 @@ RULES
 CONTROL LINES
 After your sentences you may add control lines, each on its own line, written exactly like this:
 [[go:ID]] turns the 3D globe to that machine and opens its file. Use it whenever your answer is mainly about one machine in the files. ID is the id in square brackets in the files.
-[[model:KEY]] shows a 3D model the kid can spin. KEY is one of: lm (Apollo lander), viking, mer (Spirit and Opportunity), insight, percy (Perseverance), ingenuity.
-[[do:NAME]] offers an activity. NAME is one of: laser (the quest about bouncing a laser off the Moon's mirror), mystery (guess the mystery machine), tour-moon, tour-mars (narrated tours), quiz.
+[[model:KEY]] shows a 3D model the kid can spin. KEY is one of: lm (Apollo lander), viking, mer (Spirit and Opportunity), insight, percy (Perseverance), curio (Curiosity), ingenuity.
+[[do:NAME]] offers an activity. NAME is one of: laser (the quest about bouncing a laser off the Moon's mirror), rovers (the quest where the kid drives Perseverance and Curiosity, drills, and flies Ingenuity), mystery (guess the mystery machine), tour-moon, tour-mars (narrated tours), quiz.
 [[next:FIRST QUESTION|SECOND QUESTION]] suggests two short questions the kid could ask next. Always include this line.
 Use at most one go line, one model line and one do line. Never mention these lines or their brackets in your sentences. When you use a go line you can say things like "Follow me" or "Watch the globe".
 
@@ -395,6 +396,7 @@ EXTRA FACTS
 - Laser mirrors: Apollo 11, 14 and 15 left retroreflectors (100, 100 and 300 glass prisms). Lasers on Earth time the echo (about 2.5 seconds for the round trip) to measure the distance to about a millimeter. Each prism is a corner cube: three mirror faces at right angles, which send light straight back toward where it came from, whichever way the Moon wobbles. Light takes about 1.3 seconds each way. The beam leaves Earth a few meters wide and is about 2 km wide when it reaches the Moon, so only a few specks of light make it back. The Moon moves away 3.8 cm per year. Blue Ghost Mission 1 delivered a new NASA mirror (NGLR) in 2025 that has returned laser light. Two Soviet Lunokhod rovers also carry French-built mirrors; this site covers NASA hardware.
 - Overtime: Sojourner planned 7 days, worked 83. Spirit planned 90 days, worked over 6 years. Opportunity planned 90 days, worked over 14 years. Ingenuity planned up to 5 flights, flew 72.
 - Still working in November 2026: Curiosity and Perseverance on Mars; the laser mirrors on the Moon.
+- Mars robots quest: Perseverance drills rock cores about 13 mm wide and 60 mm long, the size of a piece of classroom chalk, and seals each in a tube. It carries 43 tubes; by July 2025 it had used 33, and ten wait on the ground at a place called Three Forks. No sample has reached Earth yet: the NASA and ESA Mars Sample Return plan (a lander, a small rocket and an orbiter) was cancelled as too costly, and a new NASA team starts work in January 2027 on another way to fetch them. Curiosity grinds rock to powder and tests it in labs inside its body; its first hole, in 2013, was 1.6 cm wide and 6.4 cm deep and the powder was grey; it found carbon, hydrogen, oxygen, nitrogen, phosphorus and sulfur, things life needs, in an old lake bed. Curiosity's wheel tracks spell JPL in Morse code. Radio from Mars takes 3 to 22 minutes and usually goes through an orbiter to the giant dishes of the Deep Space Network on Earth. Ingenuity's blades spun about 2,500 times a minute because Mars air is about 1 percent as dense as Earth's; it flew by itself and sent its pictures through Perseverance.
 - Each Mars landing also left heat shields, parachutes, airbags or sky cranes. Perseverance left ten sealed sample tubes on the ground as a backup cache.
 - Since 2024 NASA pays companies to deliver its instruments to the Moon (the CLPS program): Odysseus (2024), Blue Ghost Mission 1 and Athena (2025).
 - The site is by team Quantumers for the NASA Space Apps Challenge.
@@ -456,3 +458,70 @@ LBF.LEARN = {
   athena:    ["Athena carried a NASA ice drill, but landed on its side.", "How did Athena end up?", ["On its side", "Back on Earth", "In orbit"]]
 };
 if (typeof module !== 'undefined') module.exports = LBF;
+
+/* ROVE data begin */
+/* Quest 3: three robots on Mars. Short facts for the cards, the recall quiz, and Hy's lines. */
+LBF.ROVE = {
+  cards: [
+    ["Perseverance", "It drills *rock cores* and seals them in *tubes*. The tubes are *still on Mars*, waiting for a ride home.", "Next robot: Curiosity"],
+    ["Curiosity", "It grinds rock to *powder* and tests it in a *lab inside*. Only the *answers* fly home, by *radio*.", "Next robot: Ingenuity"],
+    ["Ingenuity", "Mars air is *very thin*, so its blades spin *2,500 times a minute*. It was built for 5 flights. It made *72*.", "Hy's questions"]
+  ],
+  quiz: [
+    ["Where are Perseverance's rock tubes today?", ["Still on Mars", "In a lab on Earth", "On the Moon"]],
+    ["What does Curiosity send to Earth?", ["Answers, by radio", "Rocks, by rocket", "Sand, in a box"]],
+    ["Why do Ingenuity's blades spin so fast?", ["Mars air is very thin", "Mars is very windy", "Mars is very hot"]]
+  ],
+  say: {
+    p_go: "You are Perseverance. Drive to the glowing rock.",
+    p_drill: "Hold to drill. Stay in the green.",
+    p_hard: "Easy! Push too hard and the core crumbles.",
+    p_core: "A rock core, as big as a piece of chalk.",
+    p_seal: "Sealed tight. It waits here for pickup.",
+    p_plan: "Now the trip home. Nobody has flown it yet.",
+    p_miss: "Missed. Aim for where the orbiter will be.",
+    p_home: "That is the plan. The real tubes are still on Mars.",
+    c_go: "Now you are Curiosity. Steer around the sharp rocks.",
+    c_ouch: "Ouch. Sharp rocks poke holes in the wheels.",
+    c_drill: "This drill spins and hammers. Tap on the beat.",
+    c_grey: "Grey powder! Mars is only red on top.",
+    c_lab: "No tubes here. Curiosity has a lab inside.",
+    c_send: "The rock stays. The answers fly home.",
+    c_wait: "Radio moves at light speed. It still takes minutes.",
+    c_got: "Earth heard you. An old lake was here.",
+    i_go: "You are Ingenuity. Mars air is thin. Spin fast!",
+    i_up: "Lift-off! Take three pictures.",
+    i_land: "Great shots. Now land by the rover.",
+    i_chain: "Your radio is tiny. Who can hear you?",
+    i_got: "Your pictures reached Earth."
+  },
+  /* what each chapter's lab or screen shows; every line is from the NASA pages listed in the sources */
+  lab: ["Carbon", "Hydrogen", "Oxygen", "Nitrogen", "Phosphorus", "Sulfur"],
+  facts: [
+    "Perseverance carries 43 sample tubes. By July 2025 it had used 33 of them. Ten wait on the ground at a spot called Three Forks.",
+    "Each rock core is about the size of a piece of classroom chalk: 13 mm wide and 60 mm long.",
+    "One core, named Sapphire Canyon, has spots that might be a sign of ancient life. Only labs on Earth can tell.",
+    "NASA and Europe designed a lander, a small rocket and an orbiter to fetch the tubes. It cost too much and was cancelled. In 2027 a new NASA team starts looking for another way.",
+    "Curiosity's first drill hole, in 2013, was 1.6 cm wide and 6.4 cm deep. The powder was grey, not red.",
+    "Curiosity's wheel tracks spell J-P-L in Morse code. The rover uses the marks to check how far it has rolled.",
+    "A radio signal takes 3 to 22 minutes to cross from Mars to Earth. It depends on where the two planets are.",
+    "Ingenuity flew by itself. Nobody can steer with a joystick when the signal takes minutes to arrive."
+  ]
+};
+LBF.SOURCES.push({ group: "Quest 3: driving, drilling and flying on Mars", items: [
+  ["NASA Science: Perseverance rover components (wheels, arm, coring drill, 43 sample tubes)", "https://science.nasa.gov/mission/mars-2020-perseverance/rover-components/"],
+  ["NASA Science: Curiosity, the Mars Science Laboratory (drill, powder samples, onboard labs)", "https://science.nasa.gov/mission/msl-curiosity/"],
+  ["NASA Science: What we're learning about Ingenuity's flight control and aerodynamic performance (rotor speed, thin air, flying by itself)", "https://science.nasa.gov/blog/what-were-learning-about-ingenuitys-flight-control-and-aerodynamic-performance/"],
+  ["NASA JPL: Ingenuity landing press kit (five planned flights, air 1% as dense as Earth's)", "https://jpl.nasa.gov/news/press_kits/mars_2020/download/ingenuity_landing_press_kit.pdf"],
+  ["NASA JPL Photojournal PIA26643: the 33 sample tubes filled by July 2025", "https://photojournal.jpl.nasa.gov/catalog/PIA26643"],
+  ["NASA JPL Photojournal PIA25690: a rock core the size of classroom chalk", "https://photojournal.jpl.nasa.gov/catalog/PIA25690"],
+  ["NASA JPL Photojournal PIA17594: Curiosity's first drill hole, John Klein (1.6 cm wide, 6.4 cm deep, grey powder)", "https://photojournal.jpl.nasa.gov/catalog/PIA17594"],
+  ["NASA: Mars rover discovered a potential biosignature (Sapphire Canyon core, September 2025)", "https://nasa.gov/news-release/nasa-says-mars-rover-discovered-potential-biosignature-last-year"],
+  ["NASA JPL: Rover leaves tracks in Morse code", "https://www.jpl.nasa.gov/news/rover-leaves-tracks-in-morse-code/"],
+  ["NASA Scientific Visualization Studio: Rough Roads (sharp rocks and Curiosity's wheels)", "https://svs.gsfc.nasa.gov/11592"],
+  ["NASA Science: Speaking Percy's Language (radio takes 3 to 22 minutes; the Deep Space Network)", "https://science.nasa.gov/?p=354728"],
+  ["NASA JPL Education: Phoning Home, communicating from Mars (orbiters pass the signal on)", "https://www.jpl.nasa.gov/edu/resources/video/mars-in-a-minute-phoning-home-communicating-from-mars/"],
+  ["SpacePolicyOnline: NASA looking for new ways to return Perseverance samples from Mars (November 2026)", "https://spacepolicyonline.com/news/nasa-looking-for-new-ways-to-return-perseverance-samples-from-mars/"],
+  ["NASA 3D Resources: models of Curiosity, Perseverance, Ingenuity, Mars Reconnaissance Orbiter and the 70-meter Deep Space Network antenna", "https://github.com/nasa/NASA-3D-Resources"]
+] });
+/* ROVE data end */
