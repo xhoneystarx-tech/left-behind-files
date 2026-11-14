@@ -73,12 +73,12 @@ const Music = (function () {
   a.volume = 0.2; label(); return api;
 })();
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-/* a skip button that asks "Are you sure?" first: the second click within 4 seconds does the skipping */
+/* a skip button that asks "Are you sure?" first: the second click within 6 seconds does the skipping */
 const skipBtn = (label, fn, cls) => {
   let t = null; const b = el('button', { class: cls || 'skip', type: 'button', text: label });
   b.addEventListener('click', () => {
     if (t) { clearTimeout(t); t = null; b.textContent = label; b.classList.remove('sure'); fn(); return; }
-    b.textContent = 'Are you sure?'; b.classList.add('sure'); t = setTimeout(() => { t = null; b.textContent = label; b.classList.remove('sure'); }, 4000);
+    b.textContent = 'Are you sure?'; b.classList.add('sure'); t = setTimeout(() => { t = null; b.textContent = label; b.classList.remove('sure'); }, 6000);
   });
   return b;
 };
@@ -389,6 +389,7 @@ try { three = init3D(); } catch (err) { console.warn('3D unavailable:', err); }
   box.append(ask, el('div', { class: 'row' }, go, dots), choices);
   let order = [], i = 0, right = 0, playing = false;
   PARTS.push(() => playing && inView(box) ? ['shadow', i] : null);
+  box._skip = () => { if (!playing) return; playing = false; i = N; LBF.shadow(false); $('#models .hangar').classList.remove('playing'); choices.replaceChildren(); ask.textContent = 'Can you name a machine by its shadow?'; go.textContent = 'Start'; go.hidden = false; };
   function round() {
     const hangar = $('#models .hangar');
     if (i >= N) { playing = false; LBF.shadow(false); hangar.classList.remove('playing'); choices.replaceChildren(); ask.textContent = right + ' of ' + N + '. Now spin them yourself.'; go.textContent = 'Play again'; go.hidden = false; Notebook.badge('shadow'); Sfx.win(); say('Good eye, detective.', true); return; }
@@ -1065,7 +1066,7 @@ function init3D() {
     }
     function finish() {
       Notebook.badge('walker'); stop();
-      document.body.classList.remove('locked'); try { sessionStorage.setItem('lbf-q1', '1'); } catch (_) {}
+      document.body.classList.remove('locked');
       setTimeout(() => $('#mirrors').scrollIntoView({ behavior: 'auto', block: 'start' }), 80);
     }
     function start() {
@@ -1083,8 +1084,8 @@ function init3D() {
       b.addEventListener('pointerdown', on(1)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, on(0)));
     });
     $('#walk-exit').addEventListener('click', stop);
-    box.append(skipBtn('Skip quest', () => {                 /* skipping opens the rest of the site but earns no badge */
-      stop(); document.body.classList.remove('locked'); try { sessionStorage.setItem('lbf-q1', '1'); } catch (_) {}
+    box.append(skipBtn('Skip quest', () => {                 /* skipping opens the rest of the site and ticks the quest, but earns no badge */
+      stop(); document.body.classList.remove('locked'); Notebook.skip('#moon');
       setTimeout(() => $('#mirrors').scrollIntoView({ behavior: 'auto', block: 'start' }), 80);
     }, 'btn ghost skipq'));
     const ease = t => t * t * (3 - 2 * t), clamp01 = t => Math.max(0, Math.min(1, t));
@@ -1848,7 +1849,7 @@ function init3D() {
     function leave(to) { stop(); setTimeout(() => { const t = $(to); if (t) t.scrollIntoView({ behavior: 'auto', block: 'start' }); }, 80); }
     function finish() { finished = true; Notebook.badge('laser'); const b = $('#quest2'); if (b) b.textContent = 'Play Quest 2 again'; leave('#mars'); }
     $('#beam-exit').addEventListener('click', () => leave('#mirrors'));
-    box.append(skipBtn('Skip quest', () => leave('#mars'), 'btn ghost skipq'));
+    box.append(skipBtn('Skip quest', () => { Notebook.skip('#mirrors'); leave('#mars'); }, 'btn ghost skipq'));
     const startBtn = $('#quest2'); if (startBtn) startBtn.addEventListener('click', start);
     let lastNow = performance.now();
     views.push({ el: stage, scene, cam, quest: true, update(dt, a, rect) {
@@ -2813,19 +2814,20 @@ function init3D() {
       tweens.length = 0; for (const k in keys) keys[k] = 0; drag = null; held = 0; foundEl.hidden = true; loadEl.hidden = true; hideAll(); buildList();
     }
     const CHAPS = ['p_load', 'c_load', 'i_load'];
-    function keep(n) { try { sessionStorage.setItem('lbf-q3', n); } catch (_) {} }      /* a finished chapter stays finished, even if the child leaves at its fact card */
+    let resume = 0;                                   /* the chapter to come back to after leaving; forgotten when the page is closed */
+    function keep(n) { resume = n; }                  /* a finished chapter stays finished, even if the child leaves at its fact card */
     function chapter(n) { S.ch = n; keep(n); for (let i = 0; i < n; i++) stepDone(STEPS[i][0]); go(CHAPS[n]); }
     function start() {
       reset(); active = true; finished = false; box.hidden = false; document.body.classList.add('questing'); if (Missions.stopAll) Missions.stopAll();
       soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-memories'); Help.fresh('q3:');
-      let n = 0; try { n = clamp(parseInt(sessionStorage.getItem('lbf-q3') || '0', 10) || 0, 0, 2); } catch (_) {}
+      const n = clamp(resume, 0, 2);
       chapter(n);
     }
     function stop() { renderer.shadowMap.autoUpdate = true; Music.scene(null); ['motor', 'drill', 'rotor'].forEach(k => Sfx.loop(k, 0)); Sfx.set(true); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; held = 0; idle(); }
     function leave(to) { stop(); setTimeout(() => { const t = $(to); if (t) t.scrollIntoView({ behavior: 'auto', block: 'start' }); }, 80); }
-    function finish() { finished = true; try { sessionStorage.removeItem('lbf-q3'); } catch (_) {} Notebook.badge('rover'); const b = $('#quest3'); if (b) b.textContent = 'Play Quest 3 again'; leave('#models'); }
+    function finish() { finished = true; resume = 0; Notebook.badge('rover'); const b = $('#quest3'); if (b) b.textContent = 'Play Quest 3 again'; leave('#models'); }
     $('#rove-exit').addEventListener('click', () => leave('#mars'));
-    box.append(skipBtn('Skip quest', () => { try { sessionStorage.removeItem('lbf-q3'); } catch (_) {} leave('#models'); }, 'btn ghost skipq'));
+    box.append(skipBtn('Skip quest', () => { resume = 0; Notebook.skip('#mars'); leave('#models'); }, 'btn ghost skipq'));
     const startBtn = $('#quest3'); if (startBtn) startBtn.addEventListener('click', start);
 
     /* ---------- the page's own view of this world: Perseverance parked in Jezero, with the camera circling ---------- */
@@ -2847,7 +2849,7 @@ function init3D() {
     views.push({ el: portEl, scene, cam: viewCam, quest: true, update() { renderer.shadowMap.autoUpdate = false; } });
     if (teaseEl) views.push({ el: teaseEl, scene, cam: teaseCam, update(dt, a) { renderer.shadowMap.autoUpdate = true; teaser(dt, a); } });
     reset();
-    LBF.rove = { start, stop, go, S, tick, chapter, isDone: () => finished, rigs, keys, hold(v) { held = v ? 1 : 0; }, press, site: () => site, at(p) { lp.copy(p).project(cam); return [(lp.x + 1) / 2 * R.width + R.left, (1 - lp.y) / 2 * R.height + R.top]; } };
+    LBF.rove = { start, stop, go, S, tick, chapter, resumeAt(n) { resume = n; }, isDone: () => finished, rigs, keys, hold(v) { held = v ? 1 : 0; }, press, site: () => site, at(p) { lp.copy(p).project(cam); return [(lp.x + 1) / 2 * R.width + R.left, (1 - lp.y) / 2 * R.height + R.top]; } };
   })(); } catch (err) { console.warn('Quest 3 is unavailable:', err); }
   /* ══ Quest 3 end ══ */
   /* ══ Finale begin ══ */
@@ -2910,13 +2912,11 @@ const Notebook = (function () {
   /* the six quests in page order: where each one lives, and the badge (any one of them) that proves it is done */
   const QUESTS = [['#moon', ['walker']], ['#mirrors', ['laser']], ['#mars', ['rover']], ['#models', ['shadow']], ['#ask', ['mystery', 'interview', 'tour', 'talk']], ['#quiz', ['quiz']]];
   const FILES = C.filter(c => c.world === 'moon');           /* only the Moon has files to open; Mars is a quest */
-  const st = { files: [], badges: [] };
-  try {
-    const o = JSON.parse(localStorage.getItem('lbf-notebook') || '{}');
-    st.files = (o.files || []).filter(id => byId[id] && byId[id].world === 'moon'); st.badges = (o.badges || []).filter(b => BADGES[b]);
-  } catch (_) {}
-  const save = () => { try { localStorage.setItem('lbf-notebook', JSON.stringify(st)); } catch (_) {} };
-  const done = i => QUESTS[i][1].some(b => st.badges.includes(b));
+  /* Every visit starts fresh: nothing is saved between visits, and what earlier versions saved is cleared. */
+  const st = { files: [], badges: [], skipped: [] };
+  try { ['lbf-notebook', 'lbf-finale'].forEach(k => localStorage.removeItem(k)); ['lbf-q1', 'lbf-q3', 'lbf-intro'].forEach(k => sessionStorage.removeItem(k)); } catch (_) {}
+  const save = () => {};
+  const done = i => st.skipped.includes(i) || QUESTS[i][1].some(b => st.badges.includes(b));
   const left = () => QUESTS.map((q, i) => i).filter(i => !done(i));
   let toastT = null, onAll = null;
   function toast(text) {
@@ -2939,6 +2939,12 @@ const Notebook = (function () {
     st.badges.push(k); save(); render(); toast('New badge for your notebook: ' + BADGES[k]);
     if (was > 0 && !left().length && onAll) onAll();             /* that was the sixth quest: roll the ending */
   }
+  /* a skipped quest earns no badge, but it is ticked off, and it counts toward the ending */
+  function skip(where) {
+    const i = QUESTS.findIndex(q => q[0] === where); if (i < 0 || done(i)) return;
+    const was = left().length; st.skipped.push(i); render();
+    if (was > 0 && !left().length && onAll) onAll();
+  }
   function file(id) {
     if (!byId[id] || byId[id].world !== 'moon' || st.files.includes(id)) return;
     st.files.push(id); save(); render();
@@ -2946,7 +2952,7 @@ const Notebook = (function () {
     if (FILES.every(c => st.files.includes(c.id))) badge('moon');
   }
   render();
-  return { badge, file, left, where: i => QUESTS[i][0], whenAll(fn) { onAll = fn; } };
+  return { badge, file, skip, left, where: i => QUESTS[i][0], whenAll(fn) { onAll = fn; } };
 })();
 
 /* ───────────────────────── Missions: mystery machine and the ride-along tour, both on the Moon ───────────────────────── */
@@ -3392,7 +3398,6 @@ const Finale = (function () {
     closeChat(); Missions.stopAll(); Voice.stop();
     document.body.classList.add('questing', 'finale-on'); box.hidden = false;
     Music.scene('m-falling'); if (LBF.finale3d) LBF.finale3d.start();
-    try { localStorage.setItem('lbf-finale', '1'); } catch (_) {}
     if (RM) return still();
     load().then(() => { if (on) scene(); });
   }
@@ -3423,10 +3428,10 @@ LBF.finale = Finale;
 
 /* ───────────────────────── Quest gate: the page opens one stop at a time ───────────────────────── */
 (function () {
-  let done = false; try { done = sessionStorage.getItem('lbf-q1') === '1'; } catch (_) {}
   const can3d = !document.body.classList.contains('no3d') && LBF.walk;
-  if (!done) document.body.classList.add('locked');
-  const go = () => { if (can3d) LBF.walk.start(); else { document.body.classList.remove('locked'); $('#moon').scrollIntoView(); } };
+  document.body.classList.add('locked');                    /* every visit starts at Quest 1 */
+  if (!can3d) ['#mirrors', '#mars', '#models'].forEach(Notebook.skip);      /* without 3D graphics those quests cannot be played, so they do not block the ending */
+  const go = () => { if (can3d) LBF.walk.start(); else { document.body.classList.remove('locked'); Notebook.skip('#moon'); $('#moon').scrollIntoView(); } };
   $('#quest1').addEventListener('click', go);
   $('#quest1-again').addEventListener('click', go);
 })();
@@ -3469,7 +3474,6 @@ LBF.finale = Finale;
   });
   function done() {
     if (over) return; over = true; timers.forEach(clearTimeout); if (audio) { try { audio.pause(); } catch (_) {} }
-    try { sessionStorage.setItem('lbf-intro', '1'); } catch (_) {}
     box.classList.add('bye'); document.body.classList.remove('intro-on');
     setTimeout(() => { box.hidden = true; v.pause(); }, 550);
     G.back(); say(SAY.top, true);
@@ -3481,9 +3485,13 @@ LBF.finale = Finale;
   });
 })();
 
-/* every puzzle gets a "Skip puzzle" button that moves on to the next stop */
+/* every quest on the page gets a "Skip quest" button: it ticks the quest and moves on to the next stop */
 $$('.game').forEach(g => {
   const sec = g.closest('section'), nx = sec && sec.querySelector('a.next'), to = nx ? nx.getAttribute('href') : '#sources';
-  g.append(skipBtn('Skip puzzle', () => { const t = $(to); if (t) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); }));
+  g.append(skipBtn('Skip quest', () => { if (g._skip) g._skip(); Notebook.skip('#' + sec.id); const t = $(to); if (t) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); }));
 });
+(function () {                                   /* Play with Hy has no single puzzle, so its skip button sits under the four games */
+  const row = $('#ask-skip'); if (!row) return;
+  row.append(skipBtn('Skip quest', () => { Missions.stopAll(); Notebook.skip('#ask'); $('#quiz').scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); }));
+})();
 })();

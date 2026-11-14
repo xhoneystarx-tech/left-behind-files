@@ -712,7 +712,14 @@ body.questing #chat{height:auto;max-height:min(400px,calc(100% - 226px))}
 body.questing #chat .qs{max-height:96px}
 body.questing #log{max-height:210px}
 @media (max-width:760px){
-  body.questing #chat{top:8px;bottom:auto;max-height:44%}
+  /* on a phone the note sits top left, clear of the quest's Leave, Sound and Skip buttons */
+  body.questing #chat{top:8px;bottom:auto;left:8px;right:auto;width:calc(100vw - 162px);max-height:46%}
+  body.questing #chat header{padding:8px 10px}
+  body.questing #chat header h2{font-size:var(--s0)}
+  body.questing #chat .mode{display:none}
+  body.questing #chat .qs{max-height:46px}
+  /* while a card or a question is on screen, the note moves below it */
+  body.questing:has(.found:not([hidden])) #chat{top:auto;bottom:8px;width:calc(100vw - 16px);max-height:30%}
 }
 /* ── the ending ── */
 #finale{position:fixed;inset:0;z-index:90;overflow:hidden;color:var(--chalk);--bar:9vh;--hw:min(40vh,74vw,380px);--mw:min(17vh,136px);animation:fin-in 1.1s ease-out both}
@@ -969,6 +976,7 @@ body.no3d #finale{animation:none;background:#000}
         <p class="quiet" id="ask-mode"></p>
       </div>
     </div>
+    <div class="row" id="ask-skip"></div>
     <div class="notebook">
       <h3>Your detective notebook</h3>
       <p class="quiet" id="nb-count"></p>
