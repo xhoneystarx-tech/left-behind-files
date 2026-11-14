@@ -54,6 +54,15 @@ const Music = (function () {
   a.volume = 0.2; label(); return api;
 })();
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+/* a skip button that asks "Are you sure?" first: the second click within 4 seconds does the skipping */
+const skipBtn = (label, fn, cls) => {
+  let t = null; const b = el('button', { class: cls || 'skip', type: 'button', text: label });
+  b.addEventListener('click', () => {
+    if (t) { clearTimeout(t); t = null; b.textContent = label; b.classList.remove('sure'); fn(); return; }
+    b.textContent = 'Are you sure?'; b.classList.add('sure'); t = setTimeout(() => { t = null; b.textContent = label; b.classList.remove('sure'); }, 4000);
+  });
+  return b;
+};
 const dotsRow = n => { const d = el('div', { class: 'dots' }); for (let i = 0; i < n; i++) d.append(el('span')); return d; };
 const answer = good => { if (good) Sfx.yes(); else Sfx.no(); G.react(good ? 'yes' : 'no'); };
 const C = LBF.CASES, byId = {};
@@ -1147,6 +1156,10 @@ function init3D() {
       b.addEventListener('pointerdown', on(1)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, on(0)));
     });
     $('#walk-exit').addEventListener('click', stop);
+    box.append(skipBtn('Skip quest', () => {                 /* skipping opens the rest of the site but earns no badge */
+      stop(); document.body.classList.remove('locked'); try { sessionStorage.setItem('lbf-q1', '1'); } catch (_) {}
+      setTimeout(() => $('#mirrors').scrollIntoView({ behavior: 'auto', block: 'start' }), 80);
+    }, 'btn ghost skipq'));
     const ease = t => t * t * (3 - 2 * t), clamp01 = t => Math.max(0, Math.min(1, t));
 
     function animate(dt, want, turn) {
@@ -1688,4 +1701,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat();
     run(true);
   });
 })();
+
+/* every puzzle gets a "Skip puzzle" button that moves on to the next stop */
+$$('.game, #mirrors .panel').forEach(g => {
+  const sec = g.closest('section'), nx = sec && sec.querySelector('a.next'), to = nx ? nx.getAttribute('href') : '#sources';
+  g.append(skipBtn('Skip puzzle', () => { const t = $(to); if (t) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); }));
+});
 })();
