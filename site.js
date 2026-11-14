@@ -66,16 +66,16 @@ $('#bubble-voice').addEventListener('click', () => setVoice(true));
 
 /* ───────────────────────── The guide's notes ───────────────────────── */
 const SAY = {
-  top: "Name's Hy. Hy Drogen. One proton, one electron, zero days off. Scroll down, kid. We've got cases to crack.",
-  story: "Hydrogen is the most common atom in the universe. So wherever these machines went, I was already there.",
-  moon: "Drag the Moon around. Each light is a machine somebody left behind. Purple ones are mirrors that still work.",
-  mirrors: "Light is the fastest thing there is. It still needs more than a second to reach the Moon. Fire the laser and time it.",
-  mars: "Mars. Cold, dusty, and on average about 225 million km from my office. Teal lights are still driving.",
-  models: "These models come straight from NASA. Turn them over. A good detective checks underneath.",
-  overtime: "Planned for 90 days. Lasted over 14 years. I like a machine that doesn't know when to quit.",
-  ask: "This is my favorite room. Pick a mission, or just talk to me. I talk back.",
-  quiz: "Time to see what stuck, partner. No peeking at the files.",
-  sources: "Never trust a detective who won't show the evidence. Here's mine."
+  top: "Hi, I'm Hy. Press Start and follow me.",
+  story: "Keep scrolling. I'll explain as we go.",
+  moon: "Spin the Moon. Tap any light.",
+  mirrors: "Press the big button. Count with me.",
+  mars: "Mars! Teal lights are still driving.",
+  models: "Drag it. Look underneath.",
+  overtime: "Planned for 90 days. Lasted 14 years.",
+  ask: "My favorite stop. Pick a game, or talk to me.",
+  quiz: "Last stop. Six questions, one badge.",
+  sources: "This part is for grown-ups."
 };
 const sayEl = $('#say'), guide = $('#guide');
 let typing = null;
@@ -190,7 +190,7 @@ const filterOf = { moon: 'all', mars: 'all' };
 const globes = {};
 
 const key = $('#statuskey');
-Object.keys(LBF.STATUS).forEach(s => key.append(el('li', {}, el('span', { class: 'dot s-' + s }), el('span', {}, el('strong', { text: LBF.STATUS[s].label }), document.createTextNode(': ' + LBF.STATUS[s].note)))));
+Object.keys(LBF.STATUS).forEach(s => key.append(el('li', {}, el('span', { class: 'dot s-' + s }), el('span', { text: LBF.STATUS[s].label }))));
 
 function buildPicker(world) {
   const list = $('.caselist[data-world="' + world + '"]'), filt = $('.filters[data-world="' + world + '"]');
@@ -212,20 +212,20 @@ function renderFile(c) {
   box.replaceChildren(
     el('h3', { text: c.name }),
     el('div', { class: 'stamp s-' + c.status, text: LBF.STATUS[c.status].label }),
-    el('dl', { class: 'facts' },
-      el('dt', { text: 'When' }), el('dd', { text: c.date }),
-      el('dt', { text: 'Where' }), el('dd', { text: c.site }),
-      el('dt', { text: 'Map' }), el('dd', { text: coordText(c) }),
-      el('dt', { text: 'Type' }), el('dd', { text: LBF.KINDS[c.kind] })),
-    el('div', { class: 'blk' }, el('h4', { text: 'What happened' }), el('p', { text: c.story })),
-    el('div', { class: 'blk' }, el('h4', { text: 'What it taught us' }), el('p', { text: c.science })),
-    el('div', { class: 'blk' }, el('h4', { text: 'Still there today' }), el('p', { text: c.left })),
-    el('p', { class: 'clue', text: c.clue }),
+    el('p', { class: 'quiet', text: c.date + '. ' + c.site + '.' }),
+    el('p', { class: 'sum', text: (c.story.match(/^.*?[.!?](?=\s|$)/) || [c.story])[0] }),
+    el('details', {}, el('summary', { text: 'Read the whole file' }),
+      el('div', { class: 'blk' }, el('h4', { text: 'What happened' }), el('p', { text: c.story })),
+      el('div', { class: 'blk' }, el('h4', { text: 'What it taught us' }), el('p', { text: c.science })),
+      el('div', { class: 'blk' }, el('h4', { text: 'Still there today' }), el('p', { text: c.left })),
+      el('p', { class: 'clue', text: c.clue }),
+      el('p', { class: 'quiet', text: 'Map: ' + coordText(c) }),
+      el('p', { class: 'src' }, document.createTextNode('Source: '), el('a', { href: c.src[1], target: '_blank', rel: 'noopener', text: c.src[0] }))),
     el('div', { class: 'row' },
       c.model ? el('button', { class: 'btn onpaper', text: 'See it in 3D', onclick: () => { showModel(c.model); $('#models').scrollIntoView({ behavior: RM ? 'auto' : 'smooth' }); } }) : '',
-      el('button', { class: 'btn onpaper ghost', text: 'Ask Hy about it', onclick: () => ask('Tell me more about ' + c.name + '.') }),
+      el('button', { class: 'btn onpaper ghost', text: 'Ask Hy', onclick: () => ask('Tell me more about ' + c.name + '.') }),
       c.status !== 'lost' ? el('button', { class: 'btn onpaper ghost', text: 'Interview it', onclick: () => LBF.interview(c.id) }) : ''),
-    el('p', { class: 'src' }, document.createTextNode('Source: '), el('a', { href: c.src[1], target: '_blank', rel: 'noopener', text: c.src[0] }))
+    ''
   );
 }
 const QUIPS = {
@@ -255,7 +255,7 @@ function openCase(id, opts = {}) {
     const pct = Math.max(4, o.x / max * 78);
     box.append(el('div', { class: 'r' },
       el('div', { class: 'n', text: o.name }),
-      el('div', { class: 'track' }, el('div', { class: 'fill', style: 'width:' + pct + '%' }), el('div', { class: 'x', style: 'left:' + pct + '%', text: 'about ' + o.x + ' times' })),
+      el('div', { class: 'track' }, el('div', { class: 'fill', style: 'width:' + pct + '%' }), el('div', { class: 'x', style: 'left:' + pct + '%', text: o.x + '×' })),
       el('div', { class: 'd', text: 'Planned: ' + o.plan + '. Actually did: ' + o.did + '.' })));
   });
 })();
@@ -913,4 +913,39 @@ $('#guide-btn').addEventListener('click', () => { chat.classList.contains('open'
 $('#bubble-ask').addEventListener('click', openChat);
 $$('[data-ask]').forEach(b => b.addEventListener('click', () => ask(b.dataset.ask)));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat(); });
+
+/* ───────────────────────── Intro: meet Hy before anything else ───────────────────────── */
+(function () {
+  const box = $('#intro'), v = $('#intro-v'), line = $('#intro-line'), M = window.LBF_MEDIA || {};
+  let seen = false; try { seen = sessionStorage.getItem('lbf-intro') === '1'; } catch (_) {}
+  if (seen || RM || !M.appear) return;
+  const LINES = ["Hi! I'm Hy.", "I'm a hydrogen atom. And a detective.", "NASA left robots, cars and mirrors on the Moon and Mars.", "Nobody brought them home.", "Want to help me find them?"];
+  let i = -1, timer = null, over = false;
+  box.hidden = false; document.body.classList.add('intro-on'); guide.classList.add('gone');
+  v.src = M.appear; v.play().catch(() => {});
+  v.addEventListener('ended', () => { if (v.src !== M.speaking) { v.src = M.speaking; v.loop = true; v.play().catch(() => {}); } });
+  function next() {
+    if (over) return;
+    i++;
+    if (i >= LINES.length) { $('#intro-go').hidden = false; $('#intro-skip').hidden = true; return; }
+    line.textContent = LINES[i];
+    const spoken = Voice.isOn() ? Voice.speak(LINES[i]).then(() => new Promise(r => setTimeout(r, 500))) : new Promise(r => { timer = setTimeout(r, 1100 + LINES[i].length * 38); });
+    spoken.then(next);
+  }
+  function done() {
+    if (over) return; over = true; clearTimeout(timer); Voice.stop();
+    try { sessionStorage.setItem('lbf-intro', '1'); } catch (_) {}
+    box.classList.add('bye'); document.body.classList.remove('intro-on');
+    setTimeout(() => { box.hidden = true; v.pause(); }, 550);
+    G.back(); say(SAY.top, true);
+  }
+  $('#intro-go').addEventListener('click', done);
+  $('#intro-skip').addEventListener('click', done);
+  $('#intro-voice').addEventListener('click', e => {
+    Voice.set(true); const b = $('#sound'); b.setAttribute('aria-pressed', Voice.isOn()); b.textContent = Voice.isOn() ? 'Voice on' : 'Voice off';
+    $('#bubble-voice').hidden = true; e.currentTarget.hidden = true;
+    clearTimeout(timer); i = Math.max(-1, i - 1); next();
+  });
+  setTimeout(next, 1400);
+})();
 })();

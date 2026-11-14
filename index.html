@@ -88,7 +88,7 @@ body.no3d .no3d-note{display:block}
 /* hero */
 .hero{padding-top:clamp(40px,7vw,90px);padding-bottom:0;position:relative}
 .hero .stage{position:absolute;inset:0;min-height:0;z-index:-1}
-.hero .inner{min-height:min(74vh,700px);display:grid;align-content:center;gap:26px;padding-bottom:clamp(40px,7vw,90px)}
+.hero .inner{min-height:calc(100vh - 120px);display:grid;align-content:center;gap:26px;padding-bottom:clamp(40px,7vw,90px)}
 .hero h1{font-size:clamp(2.6rem,8.4vw,6.4rem);max-width:9ch;letter-spacing:-.01em;text-shadow:0 0 28px #000,0 0 6px #000}
 .hero .lede{text-shadow:0 0 14px #000,0 0 4px #000;max-width:38ch}
 .challenge{font-size:var(--s-1);color:var(--smoke);max-width:52ch;text-shadow:0 0 8px #000}
@@ -196,6 +196,38 @@ input[type=text]::placeholder{color:var(--smoke)}
 .qs{display:flex;flex-wrap:wrap;gap:8px}
 .qs button{border:1px solid var(--line);background:var(--soot);border-radius:4px;padding:8px 12px;font-size:var(--s-1);text-align:left}
 .qs button:hover{border-color:var(--chalk)}
+
+/* intro: meet the guide first */
+#intro{position:fixed;inset:0;z-index:100;background:#000;display:grid;place-content:center;justify-items:center;gap:22px;padding:24px;text-align:center;transition:opacity .5s}
+#intro[hidden]{display:none}
+#intro.bye{opacity:0;pointer-events:none}
+#intro .who{width:min(46vh,300px);aspect-ratio:1}
+#intro video{width:100%;height:100%;border-radius:50%;-webkit-mask-image:radial-gradient(circle,#000 52%,transparent 70%);mask-image:radial-gradient(circle,#000 52%,transparent 70%)}
+#intro-line{font-family:var(--display);font-size:clamp(1.5rem,4.6vw,2.6rem);line-height:1.2;max-width:18ch;min-height:3.6em;text-wrap:balance}
+#intro .row{justify-content:center}
+#intro [hidden]{display:none}
+body.intro-on{overflow:hidden}
+/* one idea per screen */
+.btn.big{font-size:var(--s1);padding:15px 28px}
+main > section{min-height:100vh;display:grid;align-content:center;grid-template-columns:minmax(0,1fr)}
+main > section > .inner{width:100%}
+main > section.hero{align-content:stretch}
+.beats{padding-top:0;padding-bottom:0}
+.beat{min-height:92vh;display:grid;align-content:center;gap:22px}
+.beat h2{font-size:clamp(2.2rem,7vw,5.2rem);max-width:13ch}
+.head h2{font-size:clamp(2.4rem,7vw,5rem)}
+.head .lede{font-size:var(--s2)}
+.legend{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 20px;font-size:var(--s-1);color:var(--smoke)}
+.legend li{display:flex;align-items:center;gap:7px}
+.next{display:block;width:max-content;max-width:100%;margin-top:64px;font-family:var(--display);font-size:var(--s1);color:var(--chalk);text-decoration:none;border-bottom:2px solid #ff9a3d;padding-bottom:4px}
+.next:hover{color:#ffb86b}
+details.allfiles summary,details.more summary{cursor:pointer;font-size:var(--s-1);color:var(--smoke);padding:6px 0}
+details.more{margin-top:18px}
+details.more[open] summary{margin-bottom:14px}
+.file details summary{cursor:pointer;font-family:var(--display);padding:4px 0}
+.file details[open] summary{margin-bottom:10px}
+.file details .blk{margin-bottom:12px}
+.file .sum{font-size:var(--s1);line-height:1.4}
 
 /* missions */
 .missions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;max-width:1040px}
@@ -320,18 +352,25 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
 <body>
 <canvas id="gl" aria-hidden="true"></canvas>
 
+<div id="intro" role="dialog" aria-label="Meet Hy, your guide" hidden>
+  <div class="who"><video id="intro-v" muted playsinline aria-hidden="true"></video></div>
+  <p id="intro-line" aria-live="polite"></p>
+  <div class="row">
+    <button class="btn big" id="intro-go" hidden>Let's go</button>
+    <button class="btn ghost" id="intro-voice">Hear my voice</button>
+    <button class="btn ghost" id="intro-skip">Skip intro</button>
+  </div>
+</div>
+
 <header class="bar">
   <a class="brand" href="#top"><img src="assets/logo.jpg" alt=""><span>The Left Behind Files</span></a>
-  <nav aria-label="Sections">
-    <a href="#story">The case</a>
-    <a href="#moon">Moon</a>
-    <a href="#mirrors">Mirrors</a>
-    <a href="#mars">Mars</a>
-    <a href="#models">3D models</a>
-    <a href="#overtime">Overtime</a>
-    <a href="#ask">Missions</a>
-    <a href="#quiz">Quiz</a>
-    <a href="#sources">Sources</a>
+  <nav aria-label="Steps">
+    <a href="#moon">1 Moon</a>
+    <a href="#mirrors">2 Laser</a>
+    <a href="#mars">3 Mars</a>
+    <a href="#models">4 Hold one</a>
+    <a href="#ask">5 Play</a>
+    <a href="#quiz">6 Badge</a>
   </nav>
   <button class="toggle" id="sound" aria-pressed="false">Voice off</button>
 </header>
@@ -341,74 +380,51 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
   <div class="stage" id="st-hero"></div>
   <div class="inner">
     <h1>The Left Behind Files</h1>
-    <p class="lede">Since the 1960s NASA has left landers, rovers, a helicopter and even mirrors on the Moon and Mars. A hydrogen atom detective named Hy is on the case.</p>
+    <p class="lede">NASA left machines on the Moon and Mars. Help Hy find them.</p>
     <div class="row">
-      <a class="btn" href="#story">Open the case</a>
-      <button class="btn ghost" data-ask="">Talk to Hy</button>
-      <button class="btn ghost" id="trailer-open">Watch the 15-second trailer</button>
+      <a class="btn big" href="#story">Start</a>
+      <button class="btn ghost" id="trailer-open">Watch the trailer</button>
     </div>
-    <p class="challenge">Built for the NASA Space Apps Challenge. Every date, distance and coordinate comes from NASA sources, listed at the end.</p>
   </div>
 </section>
 
-<div class="specwrap"><figure class="spectrum" aria-label="Hydrogen emission spectrum">
-  <div class="strip">
-    <i style="left:9.4%;color:var(--h-delta)"></i><i style="left:16.9%;color:var(--h-gamma)"></i><i style="left:33.1%;color:var(--h-beta)"></i><i style="left:86.3%;color:var(--h-alpha)"></i>
-  </div>
-  <figcaption>My fingerprints. These four lines are the exact colors a hydrogen atom glows: violet, blue, teal and red. Astronomers use them to find hydrogen anywhere in the universe. I used them to color-code the files.</figcaption>
-</figure></div>
-
-<section id="story" data-say="story">
+<section id="story" data-say="story" class="beats">
   <div class="inner">
-    <div class="story">
-      <div class="tale">
-        <p>It was a quiet night in the solar system. Too quiet.</p>
-        <p>The name's Hy. Hy Drogen. One proton, one electron, zero days off. I've been around since just after the Big Bang, and I get everywhere. I'm in the water you drink, the stars you wish on, and the rocket fuel that pushed people to the Moon.</p>
-        <p>A kid about your age walked into my office with a question. <em>People sent machines to the Moon and Mars. Where are they now? Did anybody bring them home?</em></p>
-        <p>Nobody brought them home. They are still out there, right where they stopped. Some are still working. Some went quiet years ago. One was never heard from again.</p>
-        <p>Every one of them left clues about how the Moon and Mars work. Grab your notebook, partner. We're opening the files.</p>
-        <div class="row" style="margin-top:8px">
-          <a class="btn" href="#moon">Start with the Moon</a>
-          <a class="btn ghost" href="#mars">Skip to Mars</a>
-        </div>
-      </div>
-      <figure class="portrait">
-        <img src="assets/logo.jpg" alt="A grey atom symbol wearing a black fedora hat.">
-        <figcaption>My official detective portrait. I only wear the hat for photos. The artist gave me a few extra electrons, too. A real hydrogen atom has exactly one.</figcaption>
-      </figure>
-    </div>
-    <div class="key">
-      <p class="quiet">How to read the lights on the maps</p>
-      <ul id="statuskey"></ul>
-    </div>
+    <div class="beat"><h2>People sent machines to the Moon and Mars.</h2></div>
+    <div class="beat"><h2>Nobody brought them home.</h2></div>
+    <div class="beat"><h2>They are still up there. Let's find them.</h2>
+      <p class="lede">Six stops. One badge at the end.</p>
+      <div class="row"><a class="btn big" href="#moon">Stop 1: the Moon</a></div></div>
   </div>
 </section>
 
 <section id="moon" class="world" data-say="moon">
   <div class="inner">
     <div class="head">
-      <p class="fileno">Cabinet L: the Moon</p>
-      <h2>384,400 km away, and covered in evidence</h2>
-      <p class="lede">Drag the Moon to turn it. Click a light to open its file. The south pole is busy, so tilt it and look underneath.</p>
+      <p class="fileno">Stop 1 of 6</p>
+      <h2>The Moon</h2>
+      <p class="lede">Spin it. Tap a light.</p>
+      <ul id="statuskey" class="legend"></ul>
     </div>
     <p class="no3d-note">This browser could not start 3D graphics, so the globe is hidden. Every file is still in the list below.</p>
     <div class="world-grid">
       <div class="picker">
         <div class="filters" data-world="moon" role="group" aria-label="Filter Moon files"></div>
-        <ol class="caselist" data-world="moon"></ol>
+        <details class="allfiles"><summary>List all Moon files</summary><ol class="caselist" data-world="moon"></ol></details>
       </div>
       <div class="stage grab" id="st-moon" aria-label="3D globe of the Moon with a light at each hardware site"><div class="mission" id="mis-moon" aria-live="polite"></div><div class="tip"></div><div class="pinlabel"></div><span class="hint">Drag to turn</span></div>
       <article class="file" id="file-moon" aria-live="polite"></article>
     </div>
+    <a class="next" href="#mirrors">Next stop: bounce a laser off the Moon</a>
   </div>
 </section>
 
 <section id="mirrors" data-say="mirrors">
   <div class="inner">
     <div class="head">
-      <p class="fileno">Experiment: the mirrors</p>
-      <h2>Measure the distance to the Moon with a laser</h2>
-      <p class="lede">Astronauts left trays of glass prisms on the Moon. Each prism sends light straight back where it came from. Fire a laser at one, time the echo, and you know how far away the Moon is.</p>
+      <p class="fileno">Stop 2 of 6</p>
+      <h2>Bounce a laser off the Moon</h2>
+      <p class="lede">Astronauts left mirrors up there. Fire. Time the echo.</p>
     </div>
     <div class="beam">
       <div class="stage" id="st-laser" aria-label="3D view of a laser pulse travelling from Earth to the Moon and back"></div>
@@ -426,49 +442,50 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
           <input type="range" id="orbit" min="0" max="100" value="50">
           <div class="ends"><span>Closest to Earth</span><span>Farthest</span></div>
         </div>
-        <div class="row"><button class="btn" id="fire">Fire the laser</button><span class="quiet" id="fire-note">The pulse travels in real time.</span></div>
+        <div class="row"><button class="btn" id="fire">Fire the laser</button></div>
         <div class="readout" id="readout" aria-live="polite">
           <span class="quiet">Echo time</span>
           <span class="big" id="echo">0.000 s</span>
           <span id="dist" class="quiet">Distance = speed of light × time ÷ 2</span>
         </div>
       </div>
-      <ul class="mirror-facts">
+      <details class="more"><summary>What scientists learned</summary><ul class="mirror-facts">
         <li>The Apollo 11 and Apollo 14 mirrors have 100 prisms each. Apollo 15's has 300.</li>
         <li>Timing the echo gives the distance to within about a millimeter.</li>
         <li>The measurements show the Moon drifts 3.8 cm farther from Earth every year. That is about how fast your fingernails grow.</li>
         <li>In 2025 the Blue Ghost lander delivered a new NASA mirror, and it has already returned laser light.</li>
-      </ul>
+      </ul></details>
     </div>
+    <a class="next" href="#mars">Next stop: Mars</a>
   </div>
 </section>
 
 <section id="mars" class="world" data-say="mars">
   <div class="inner">
     <div class="head">
-      <p class="fileno">Cabinet M: Mars</p>
-      <h2>A whole planet where every resident is a robot</h2>
-      <p class="lede">Two of these machines are still driving today. The rest are parked for good. Drag the planet and open their files.</p>
+      <p class="fileno">Stop 3 of 6</p>
+      <h2>Mars</h2>
+      <p class="lede">Every resident is a robot. Two are still driving.</p>
     </div>
     <p class="no3d-note">This browser could not start 3D graphics, so the globe is hidden. Every file is still in the list below.</p>
     <div class="world-grid">
       <div class="picker">
         <div class="filters" data-world="mars" role="group" aria-label="Filter Mars files"></div>
-        <ol class="caselist" data-world="mars"></ol>
+        <details class="allfiles"><summary>List all Mars files</summary><ol class="caselist" data-world="mars"></ol></details>
       </div>
       <div class="stage grab" id="st-mars" aria-label="3D globe of Mars with a light at each hardware site"><div class="mission" id="mis-mars" aria-live="polite"></div><div class="tip"></div><div class="pinlabel"></div><span class="hint">Drag to turn</span></div>
       <article class="file" id="file-mars" aria-live="polite"></article>
     </div>
-    <p class="leftovers">Not everything on Mars has a file. Each landing also left the gear that got it down safely: heat shields, parachutes, airbags and, for the two biggest rovers, a rocket-powered sky crane that flew off and crashed at a safe distance. Perseverance has also set ten sealed sample tubes on the ground as a backup supply for a future pickup.</p>
+    <a class="next" href="#models">Next stop: hold one in your hands</a>
   </div>
 </section>
 
 <section id="models" data-say="models">
   <div class="inner">
     <div class="head">
-      <p class="fileno">Evidence room</p>
-      <h2>Pick it up and turn it over</h2>
-      <p class="lede">These are NASA's own 3D models of the real spacecraft. Drag to spin them and look underneath.</p>
+      <p class="fileno">Stop 4 of 6</p>
+      <h2>Hold one in your hands</h2>
+      <p class="lede">Real NASA models. Drag to spin.</p>
     </div>
     <p class="no3d-note">This browser could not start 3D graphics, so the models are hidden.</p>
     <div class="hangar">
@@ -478,17 +495,19 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
       </div>
       <div class="stage grab" id="st-model" aria-label="3D model viewer"><div class="loading" id="model-loading">Fetching the evidence…</div><span class="hint">Drag to spin</span></div>
     </div>
+    <a class="next" href="#overtime">Next: a clue about these machines</a>
   </div>
 </section>
 
 <section id="overtime" data-say="overtime">
   <div class="inner">
     <div class="head">
-      <p class="fileno">Pattern in the evidence</p>
-      <h2>They were only supposed to last a few weeks</h2>
-      <p class="lede">Engineers promise a short mission and build the machine to survive it. Then it keeps going. Each bar shows how many times longer than planned.</p>
+      <p class="fileno">Clue</p>
+      <h2>They would not quit</h2>
+      <p class="lede">How many times longer than planned each one lasted.</p>
     </div>
     <div class="over" id="over"></div>
+    <a class="next" href="#ask">Next stop: play with Hy</a>
   </div>
 </section>
 
@@ -496,24 +515,24 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
   <div class="inner">
     <div class="head">
       <video class="aistar" id="aistar" muted loop playsinline aria-hidden="true"></video>
-      <p class="fileno">The detective is in</p>
-      <h2>Don't just ask. Go on a mission with Hy.</h2>
-      <p class="lede">Hy talks, listens and takes you places. Ask him something and watch the globes move, or pick a mission.</p>
+      <p class="fileno">Stop 5 of 6</p>
+      <h2>Play with Hy</h2>
+      <p class="lede">He talks. He listens. He takes you places.</p>
     </div>
     <div class="missions">
       <div class="mcard">
         <h3>Mystery machine</h3>
-        <p>Hy is thinking of one machine. You get three clues. Find it on the globe and click its light.</p>
+        <p>Three clues. Find it on the globe.</p>
         <div class="row"><button class="btn" id="m-mystery">Start a mystery</button></div>
       </div>
       <div class="mcard">
         <h3>Interview a machine</h3>
-        <p>Ever wanted to ask a Mars rover how its day went? Pick one and it answers for itself.</p>
+        <p>Ask a rover how its day went.</p>
         <div class="row"><label class="sr" for="m-who">Machine to interview</label><select id="m-who"></select><button class="btn" id="m-interview">Start the interview</button></div>
       </div>
       <div class="mcard">
         <h3>Ride along</h3>
-        <p>Sit back. Hy flies you from site to site and tells the story out loud.</p>
+        <p>Sit back. Hy flies and tells the story.</p>
         <div class="row"><button class="btn" data-tour="moon">Moon tour</button><button class="btn" data-tour="mars">Mars tour</button></div>
       </div>
       <div class="mcard">
@@ -533,14 +552,15 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
       <div class="stamps" id="nb-stamps" aria-hidden="true"></div>
       <ul class="badges" id="nb-badges"></ul>
     </div>
+    <a class="next" href="#quiz">Last stop: earn your badge</a>
   </div>
 </section>
 
 <section id="quiz" data-say="quiz">
   <div class="inner">
     <div class="head">
-      <p class="fileno">Close the case</p>
-      <h2>Six questions before you get your badge</h2>
+      <p class="fileno">Stop 6 of 6</p>
+      <h2>Earn your badge</h2>
     </div>
     <div class="quiz" id="quiz-box"></div>
   </div>
@@ -549,12 +569,12 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
 <section id="sources" data-say="sources">
   <div class="inner">
     <div class="head">
-      <p class="fileno">Evidence log</p>
-      <h2>Where every fact came from</h2>
-      <p class="lede">A good detective shows the evidence. Status information was checked in November 2026.</p>
+      <p class="fileno">For grown-ups</p>
+      <h2>Sources and team</h2>
+      <p class="lede">Every fact comes from NASA. Checked November 2026.</p>
     </div>
-    <div class="srcgrid" id="srcgrid"></div>
-    <div class="about">
+    <details class="more"><summary>Show all sources</summary><div class="srcgrid" id="srcgrid"></div></details>
+    <details class="more"><summary>About the team and the challenge</summary><div class="about">
       <img src="assets/logo-full.jpg" alt="Quantumers team logo: an atom wearing a black fedora.">
       <dl>
         <dt>Project</dt><dd>The Left Behind Files</dd>
@@ -564,7 +584,7 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
         <dt>Our solution</dt><dd>A detective story with real NASA coordinates on 3D globes, NASA's 3D spacecraft models, a laser experiment, and Hy, an animated hydrogen atom guide who answers questions with AI.</dd>
         <dt>How it was made</dt><dd>We are hoping to make learning about space easy and fun for children. This website was built with the help of Claude.</dd>
       </dl>
-    </div>
+    </div></details>
   </div>
 </section>
 </main>
