@@ -558,6 +558,109 @@ function init3D() {
     } });
   })();
 
+
+  /* Quest 1: walk on a small Moon and find three kinds of machine */
+  (function () {
+    const stage = $('#walk-stage'), box = $('#walk'), R = 10;
+    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(58, 1, 0.1, 500);
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(R, 128, 96), globeMat(moonTex)));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.35); sun.position.set(30, 22, 18); scene.add(sun);
+    const earth = new THREE.Mesh(new THREE.SphereGeometry(7, 48, 32), globeMat(tex('earth.jpg'))); earth.position.set(120, 30, -10); scene.add(earth);
+    const sites = C.filter(c => c.world === 'moon').map(c => {
+      const dir = (c.plot ? ll(c.plot[0], c.plot[1], 1) : ll(c.lat, c.lon, 1)).normalize();
+      const g = new THREE.Group(); g.position.copy(dir).multiplyScalar(R); g.lookAt(dir.clone().multiplyScalar(R * 2));
+      const col = STATUS_COL[c.status];
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 4, 10, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.6, side: THREE.DoubleSide }));
+      beam.rotation.x = Math.PI / 2; beam.position.z = 2;
+      const base = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.34, 6), new THREE.MeshStandardMaterial({ color: 0xd9d9de, roughness: 0.6, metalness: 0.3 }));
+      base.rotation.x = Math.PI / 2; base.position.z = 0.17;
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 40), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8 })); ring.position.z = 0.02;
+      g.add(beam, base, ring); scene.add(g);
+      return { c, dir, beam, ring, found: false };
+    });
+    /* Hy is the walker */
+    const hy = new THREE.Group();
+    hy.add(new THREE.Mesh(new THREE.SphereGeometry(0.24, 24, 18), new THREE.MeshBasicMaterial({ color: 0xff8a2a })));
+    hy.add(new THREE.Mesh(new THREE.SphereGeometry(0.36, 24, 18), new THREE.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0.22 })));
+    const orbit = new THREE.Mesh(new THREE.TorusGeometry(0.44, 0.012, 6, 48), new THREE.MeshBasicMaterial({ color: 0xffd9a0 })); orbit.rotation.x = 1.2; hy.add(orbit);
+    const glow = new THREE.PointLight(0xff9a3d, 0.9, 5); hy.add(glow); scene.add(hy);
+
+    const NEED = [['mirror', 'A mirror still in use'], ['silent', 'One that has gone quiet'], ['impact', 'One that crashed on purpose']];
+    const keys = { up: 0, down: 0, left: 0, right: 0 };
+    const pos = new THREE.Vector3(), head = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), right = new THREE.Vector3();
+    let active = false, zoom = 0, clock = 0, got = {}, paused = false, rows = {};
+    function reset() {
+      pos.copy(ll(-5, 9, 1)).normalize(); head.set(0, 0, -1); head.addScaledVector(pos, -head.dot(pos)).normalize();
+      zoom = 0; got = {}; paused = false; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.6; });
+      const list = $('#walk-list'); list.replaceChildren(); rows = {};
+      NEED.forEach(([k, label]) => { const li = el('li', { class: 's-' + k }, el('span', { class: 'arrow', text: '▲' }), el('span', { text: label }), el('span', { class: 'tick', text: '' })); rows[k] = li; list.append(li); });
+      $('#walk-found').hidden = true;
+    }
+    function card(title, lines, btn, fn) {
+      const f = $('#walk-found'); paused = true;
+      f.replaceChildren(el('h3', { text: title }), ...lines.map(t => el('p', { text: t })), el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: btn, onclick: () => { f.hidden = true; paused = false; fn && fn(); } })));
+      f.hidden = false;
+    }
+    function find(s) {
+      s.found = true; s.beam.material.opacity = 0.15; Notebook.file(s.c.id);
+      const k = s.c.status, fresh = rows[k] && !got[k];
+      if (fresh) { got[k] = s.c.id; rows[k].classList.add('done'); rows[k].querySelector('.tick').textContent = s.c.name; }
+      say(s.c.name + '. ' + QUIPS[k], true, { silent: true }); Voice.speak(QUIPS[k]);
+      const all = NEED.every(([n]) => got[n]);
+      const first = (s.c.story.match(/^.*?[.!?](?=\s|$)/) || [s.c.story])[0];
+      if (all) card('Quest complete!', ['You found ' + s.c.name + '. ' + first, 'That is all three. You are a Moon walker.'], 'Go to Stop 2', finish);
+      else card('You found ' + s.c.name, [LBF.STATUS[k].label + '. ' + first, fresh ? 'One down. Keep walking.' : 'You already have one of these. Look for a different color.'], 'Keep walking');
+    }
+    function finish() {
+      Notebook.badge('walker'); stop();
+      document.body.classList.remove('locked'); try { sessionStorage.setItem('lbf-q1', '1'); } catch (_) {}
+      setTimeout(() => $('#mirrors').scrollIntoView({ behavior: 'auto', block: 'start' }), 80);
+    }
+    function start() {
+      reset(); active = true; box.hidden = false; document.body.classList.add('questing'); Missions.stopAll && Missions.stopAll();
+      say('Walk into the light beams. Find one of each color on the list.', true);
+    }
+    function stop() { active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
+    LBF.walk = { start, stop };
+    const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+    addEventListener('keydown', e => { if (!active || !KEYMAP[e.code] || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; keys[KEYMAP[e.code]] = 1; e.preventDefault(); });
+    addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = 0; });
+    $$('#walk .pad button').forEach(b => {
+      const k = b.dataset.k, on = v => e => { e.preventDefault(); keys[k] = v; b.classList.toggle('on', !!v); };
+      b.addEventListener('pointerdown', on(1)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, on(0)));
+    });
+    $('#walk-exit').addEventListener('click', stop);
+    views.push({ el: stage, scene, cam, update(dt) {
+      if (!active) return;
+      clock += dt; zoom = Math.min(1, zoom + dt / 2.6);
+      if (!paused && zoom >= 1) {
+        const turn = keys.left - keys.right, fwd = keys.up - keys.down * 0.6;
+        if (turn) head.applyAxisAngle(pos, turn * 1.9 * dt);
+        if (fwd) { pos.addScaledVector(head, fwd * 3.4 * dt / R).normalize(); }
+        head.addScaledVector(pos, -head.dot(pos)).normalize();
+        for (const s of sites) if (!s.found && pos.dot(s.dir) > 0.9965) { find(s); break; }
+      }
+      right.crossVectors(head, pos).normalize();
+      hy.position.copy(pos).multiplyScalar(R + 0.5 + Math.sin(clock * 3) * 0.05);
+      orbit.rotation.z += dt * 2.5;
+      /* arrows on the list point at the nearest machine of each kind still needed */
+      NEED.forEach(([k]) => {
+        if (got[k]) return; let best = null, bd = -2;
+        for (const s of sites) if (s.c.status === k && !s.found) { const d = pos.dot(s.dir); if (d > bd) { bd = d; best = s; } }
+        if (best) { tmp.copy(best.dir).addScaledVector(pos, -best.dir.dot(pos)); rows[k].querySelector('.arrow').style.transform = 'rotate(' + Math.atan2(tmp.dot(right), tmp.dot(head)) + 'rad)'; }
+      });
+      sites.forEach(s => { s.ring.scale.setScalar(1 + Math.sin(clock * 3 + s.dir.x * 9) * 0.12); });
+      /* fly in from high above, then follow just behind Hy */
+      const e = zoom * zoom * (3 - 2 * zoom);
+      tmp.copy(pos).multiplyScalar(R + 1.9).addScaledVector(head, -3.4);
+      tmp2.copy(pos).multiplyScalar(R + 60);
+      cam.position.lerpVectors(tmp2, tmp, e); cam.up.copy(zoom < 1 ? head : pos);
+      if (zoom >= 1) cam.up.copy(pos);
+      tmp.copy(pos).multiplyScalar(R + 0.6).addScaledVector(head, 2.2 * e); cam.lookAt(tmp);
+    } });
+  })();
+
   /* render loop: one canvas, one viewport per stage */
   let last = performance.now(), W = 0, H = 0;
   function frame(now) {
@@ -588,7 +691,7 @@ function init3D() {
 
 /* ───────────────────────── Detective notebook ───────────────────────── */
 const Notebook = (function () {
-  const BADGES = { first: 'Rookie detective', moon: 'Moon expert', mars: 'Mars expert', laser: 'Laser ranger', mystery: 'Mystery cracked', interview: 'Interviewer', tour: 'Rode along', talk: 'Talked to Hy', quiz: 'Quiz badge' };
+  const BADGES = { first: 'Rookie detective', moon: 'Moon expert', mars: 'Mars expert', laser: 'Laser ranger', mystery: 'Mystery cracked', interview: 'Interviewer', tour: 'Rode along', talk: 'Talked to Hy', quiz: 'Quiz badge', walker: 'Moon walker' };
   const st = { files: [], badges: [] };
   try {
     const o = JSON.parse(localStorage.getItem('lbf-notebook') || '{}');
@@ -710,7 +813,7 @@ const Missions = (function () {
   function stopTour() { if (tour) { tour.stop = true; if (tour.skip) tour.skip(); tour = null; Voice.stop(); } clear(); }
   function stopAll() { stopTour(); mystery = null; clear(); }
   return {
-    startMystery, startTour,
+    startMystery, startTour, stopAll,
     /* a click on a light or a list entry: a guess during a mystery, and it ends a running tour */
     intercept(c) { if (mystery) { guess(c); return true; } if (tour) stopTour(); return false; }
   };
@@ -925,6 +1028,16 @@ $('#guide-btn').addEventListener('click', () => { chat.classList.contains('open'
 $('#bubble-ask').addEventListener('click', openChat);
 $$('[data-ask]').forEach(b => b.addEventListener('click', () => ask(b.dataset.ask)));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat(); });
+
+/* ───────────────────────── Quest gate: the page opens one stop at a time ───────────────────────── */
+(function () {
+  let done = false; try { done = sessionStorage.getItem('lbf-q1') === '1'; } catch (_) {}
+  const can3d = !document.body.classList.contains('no3d') && LBF.walk;
+  if (!done) document.body.classList.add('locked');
+  const go = () => { if (can3d) LBF.walk.start(); else { document.body.classList.remove('locked'); $('#moon').scrollIntoView(); } };
+  $('#quest1').addEventListener('click', go);
+  $('#quest1-again').addEventListener('click', go);
+})();
 
 /* ───────────────────────── Intro: meet Hy before anything else ───────────────────────── */
 (function () {

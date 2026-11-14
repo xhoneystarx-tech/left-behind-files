@@ -229,6 +229,35 @@ details.more[open] summary{margin-bottom:14px}
 .file details .blk{margin-bottom:12px}
 .file .sum{font-size:var(--s1);line-height:1.4}
 
+/* quests: the rest of the page stays shut until the quest button is pressed */
+body.locked main > section:not(.hero):not(#story), body.locked footer, body.locked .bar nav{display:none}
+body.questing{overflow:hidden}
+body.questing main, body.questing .bar, body.questing footer{visibility:hidden}
+#walk{position:fixed;inset:0;z-index:25}
+#walk[hidden]{display:none}
+#walk-stage{position:absolute;inset:0}
+#walk .hud{position:absolute;left:16px;top:16px;background:rgba(0,0,0,.72);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:8px;max-width:min(330px,calc(100vw - 32px))}
+#walk .hud strong{font-family:var(--display);font-weight:400;font-size:var(--s1)}
+#walk .hud > span{font-size:var(--s-1);color:var(--smoke)}
+#walk-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+#walk-list li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font-size:var(--s0)}
+#walk-list li.done{color:var(--smoke);text-decoration:line-through}
+#walk-list .arrow{width:24px;height:24px;display:grid;place-items:center;color:var(--c);font-size:18px;text-shadow:0 0 8px var(--c)}
+#walk-list li.done .arrow{transform:none !important}
+#walk .pad{position:absolute;left:18px;bottom:18px;display:grid;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(2,58px);gap:6px}
+#walk .pad button{background:rgba(20,20,22,.8);border:1px solid var(--line);border-radius:8px;font-size:20px;touch-action:none;user-select:none}
+#walk .pad button:active,#walk .pad button.on{background:#ff9a3d;color:#17171a}
+#walk .pad [data-k=up]{grid-column:2;grid-row:1}
+#walk .pad [data-k=left]{grid-column:1;grid-row:2}
+#walk .pad [data-k=down]{grid-column:2;grid-row:2}
+#walk .pad [data-k=right]{grid-column:3;grid-row:2}
+#walk .keys{position:absolute;left:214px;bottom:22px;font-size:var(--s-1);color:var(--smoke)}
+#walk-exit{position:absolute;right:16px;top:16px;padding:7px 14px;font-size:var(--s-1)}
+#walk .found{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--paper);color:var(--ink);padding:22px 24px;width:min(420px,calc(100vw - 32px));display:grid;gap:12px;box-shadow:0 20px 70px rgba(0,0,0,.85)}
+#walk .found[hidden]{display:none}
+#walk .found h3{font-size:var(--s3)}
+@media (max-width:760px){#walk .keys{display:none}}
+
 /* missions */
 .missions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;max-width:1040px}
 .mcard{background:var(--soot);border:1px solid var(--line);border-left:3px solid #ff9a3d;padding:18px 20px;display:grid;gap:12px;align-content:start}
@@ -393,17 +422,18 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
     <div class="beat"><h2>People sent machines to the Moon and Mars.</h2></div>
     <div class="beat"><h2>Nobody brought them home.</h2></div>
     <div class="beat"><h2>They are still up there. Let's find them.</h2>
-      <p class="lede">Six stops. One badge at the end.</p>
-      <div class="row"><a class="btn big" href="#moon">Stop 1: the Moon</a></div></div>
+      <p class="lede">Your first quest is on the Moon.</p>
+      <div class="row"><button class="btn big" id="quest1">Stop 1: the Moon</button></div></div>
   </div>
 </section>
 
 <section id="moon" class="world" data-say="moon">
   <div class="inner">
     <div class="head">
-      <p class="fileno">Stop 1 of 6</p>
-      <h2>The Moon</h2>
-      <p class="lede">Spin it. Tap a light.</p>
+      <p class="fileno">Quest 1 complete</p>
+      <h2>Your Moon map</h2>
+      <p class="lede">Everything NASA left up there. Tap a light.</p>
+      <div class="row"><button class="btn ghost" id="quest1-again">Walk on the Moon again</button></div>
       <ul id="statuskey" class="legend"></ul>
     </div>
     <p class="no3d-note">This browser could not start 3D graphics, so the globe is hidden. Every file is still in the list below.</p>
@@ -590,6 +620,24 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
 </main>
 
 <footer>The Left Behind Files. Spacecraft models, the Mars map and the star map are from NASA 3D Resources. This site is a student project and is not an official NASA website.</footer>
+
+<div id="walk" hidden>
+  <div id="walk-stage" aria-label="You are on the Moon. Walk to the light beams."></div>
+  <div class="hud">
+    <strong>Quest 1: Moon walk</strong>
+    <span>Find one of each. Follow the arrows.</span>
+    <ul id="walk-list"></ul>
+  </div>
+  <div class="pad" aria-label="Move">
+    <button data-k="up" aria-label="Forward">▲</button>
+    <button data-k="left" aria-label="Turn left">◀</button>
+    <button data-k="down" aria-label="Back">▼</button>
+    <button data-k="right" aria-label="Turn right">▶</button>
+  </div>
+  <p class="keys">Arrow keys or W A S D to move</p>
+  <div class="found" id="walk-found" hidden></div>
+  <button class="btn ghost" id="walk-exit">Leave the Moon</button>
+</div>
 
 <div id="guide">
   <button id="guide-btn" aria-label="Hy, your guide. Open the question box."><img src="assets/buddy.jpg" alt=""></button>
