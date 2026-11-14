@@ -6,7 +6,7 @@ An interactive 3D story about the hardware NASA has left on the Moon and Mars, g
 
 | File | What it is |
 | --- | --- |
-| `index.html`, `app.js`, `data.js` | The website. `data.js` holds every case file and the NASA source links. |
+| `index.html`, `site.js`, `data.js` | The website. `data.js` holds every case file and the NASA source links. |
 | `media.js`, `intro.js` | The guide's video clips and the trailer, packed so they load from one file each. |
 | `models/` | NASA 3D spacecraft models (from NASA 3D Resources), one file per model. |
 | `assets/` | Moon, Mars, Earth and star maps, plus the team logo. |
