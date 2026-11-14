@@ -147,6 +147,12 @@ function say(text, force, opts) {
   }, 24);
   return spoken;
 }
+/* Enter skips whatever Hy is saying: the line appears in full and the voice stops. The intro is the one thing that cannot be skipped. */
+addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || document.body.classList.contains('intro-on') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if (!guideState.typing && !guideState.voice) return;
+  clearInterval(typing); guideState.typing = 0; if (sayEl.dataset.full) sayEl.textContent = sayEl.dataset.full; Voice.stop();
+});
 sayEl.textContent = SAY.top; sayEl.dataset.full = SAY.top; wake(innerWidth < 760 ? 7000 : 14000);
 $('#guide-btn').addEventListener('pointerenter', () => wake(6000));
 $('#bubble').addEventListener('pointerenter', () => wake(12000));
