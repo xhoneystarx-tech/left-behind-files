@@ -1651,19 +1651,30 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat();
   line.textContent = 'Someone wants to meet you.';
   const go = $('#intro-go'), meet = $('#intro-voice');
   meet.textContent = 'Meet Hy'; meet.className = 'btn big'; go.hidden = true;
-  function finish() { $('#intro-go').hidden = false; v.pause(); }
+  let idx = -1, running = false, finished = false;
+  function finish() { if (finished) return; finished = true; timers.forEach(clearTimeout); if (audio) { try { audio.pause(); } catch (_) {} } $('#intro-go').hidden = false; v.pause(); }
+  function schedule(from, lead) {            /* show line `from` now (or after `lead` seconds) and the rest on their cues */
+    timers.forEach(clearTimeout); timers = []; const base = CUES[from] - (lead || 0);
+    for (let i = from; i < LINES.length; i++) timers.push(setTimeout(() => { if (!over) { idx = i; line.textContent = LINES[i]; } }, (CUES[i] - base) * 1000));
+    timers.push(setTimeout(finish, (13 - base) * 1000));
+  }
   function run(withSound) {
-    meet.hidden = true;
+    meet.hidden = true; running = true;
     v.src = M.appear; v.loop = false; v.play().catch(() => {});
     v.onended = () => { v.onended = null; v.src = M.speaking; v.loop = true; v.play().catch(() => {}); };
-    const start = t0 => LINES.forEach((t, i) => timers.push(setTimeout(() => { if (!over) line.textContent = t; }, (CUES[i] + t0) * 1000)));
     if (withSound) {
-      audio = new Audio('audio/intro.mp3');
-      audio.onended = finish; audio.onerror = () => { timers.push(setTimeout(finish, 12500)); };
-      const p = audio.play(); if (p && p.catch) p.catch(() => { timers.push(setTimeout(finish, 12500)); });
-      start(0);
-    } else { start(0.4); timers.push(setTimeout(finish, 13000)); }
+      audio = new Audio('audio/intro.mp3'); audio.onended = finish;
+      const p = audio.play(); if (p && p.catch) p.catch(() => {});
+      schedule(0);
+    } else schedule(0, 0.4);
   }
+  /* Enter skips the line Hy is on and jumps to the next one; after the last line it opens the site */
+  addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || over || !running) return; e.preventDefault();
+    if (finished) return done();
+    const n = idx + 1; if (n >= LINES.length) return finish();
+    idx = n; line.textContent = LINES[n]; if (audio) { try { audio.currentTime = CUES[n]; } catch (_) {} } schedule(n);
+  });
   function done() {
     if (over) return; over = true; timers.forEach(clearTimeout); if (audio) { try { audio.pause(); } catch (_) {} }
     try { sessionStorage.setItem('lbf-intro', '1'); } catch (_) {}
