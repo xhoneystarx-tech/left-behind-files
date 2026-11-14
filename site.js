@@ -16,6 +16,27 @@ const el = (tag, attrs = {}, ...kids) => {
 };
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const RAD = Math.PI / 180;
+/* small synth sounds shared by every game */
+const Sfx = (function () {
+  let ctx = null;
+  function tone(f0, f1, dur, vol, type, delay) {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      const t = ctx.currentTime + (delay || 0), o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type || 'triangle'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + dur + 0.02);
+    } catch (_) {}
+  }
+  return {
+    yes() { tone(660, 660, 0.12, 0.15); tone(990, 990, 0.22, 0.15, 'triangle', 0.11); }, no() { tone(210, 150, 0.3, 0.1, 'square'); },
+    win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.22, 0.16, 'triangle', i * 0.11)); },
+    zap() { tone(1800, 300, 0.4, 0.08, 'sawtooth'); }, tick() { tone(520, 520, 0.05, 0.08); }
+  };
+})();
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const dotsRow = n => { const d = el('div', { class: 'dots' }); for (let i = 0; i < n; i++) d.append(el('span')); return d; };
+const answer = good => { if (good) Sfx.yes(); else Sfx.no(); G.react(good ? 'yes' : 'no'); };
 const C = LBF.CASES, byId = {};
 C.forEach(c => byId[c.id] = c);
 ['moon', 'mars'].forEach(w => C.filter(c => c.world === w)
@@ -83,10 +104,10 @@ const SAY = {
   moon: "Spin the Moon. Tap any light.",
   mirrors: "Press the big button. Count with me.",
   mars: "Mars! Teal lights are still driving.",
-  models: "Drag it. Look underneath.",
+  models: "Whose shadow is this?",
   overtime: "Planned for 90 days. Lasted 14 years.",
   ask: "My favorite stop. Pick a game, or talk to me.",
-  quiz: "Last stop. Six questions, one badge.",
+  quiz: "Last stop. Real or fake? You decide.",
   sources: "This part is for grown-ups."
 };
 const sayEl = $('#say'), guide = $('#guide');
@@ -267,41 +288,68 @@ function openCase(id, opts = {}) {
 }
 ['moon', 'mars'].forEach(w => { buildPicker(w); renderFile(byId[selected[w]]); });
 
-/* ───────────────────────── Overtime bars ───────────────────────── */
+/* ───────────────────────── Overtime: stop the bar where you think the machine quit ───────────────────────── */
 (function () {
-  const box = $('#over'), max = Math.max.apply(null, LBF.OVER.map(o => o.x));
-  LBF.OVER.forEach(o => {
-    const pct = Math.max(4, o.x / max * 78);
-    box.append(el('div', { class: 'r' },
-      el('div', { class: 'n', text: o.name }),
-      el('div', { class: 'track' }, el('div', { class: 'fill', style: 'width:' + pct + '%' }), el('div', { class: 'x', style: 'left:' + pct + '%', text: o.x + '×' })),
-      el('div', { class: 'd', text: 'Planned: ' + o.plan + '. Actually did: ' + o.did + '.' })));
-  });
+  const box = $('#over'), SCALE = 64, items = LBF.OVER, dots = dotsRow(items.length);
+  const ask = el('p', { class: 'ask', text: 'When did each one quit? Stop the bar.' }), go = el('button', { class: 'btn big', text: 'Start' });
+  const rows = el('div', { class: 'over-rows' });
+  box.append(el('div', { class: 'game' }, ask, el('div', { class: 'row' }, go, dots)), rows);
+  let i = -1, raf = 0, t0 = 0, cur = null, close = 0;
+  function next() {
+    i++; if (i >= items.length) { ask.textContent = close + ' of ' + items.length + ' close guesses. They all beat the plan.'; go.textContent = 'Play again'; go.hidden = false; i = -1; Notebook.badge('stay'); Sfx.win(); say('They just would not quit.', true); return; }
+    if (i === 0) { rows.replaceChildren(); close = 0; $$('span', dots).forEach(d => d.className = ''); }
+    const o = items[i], fill = el('div', { class: 'fill', style: 'width:0%' }), x = el('div', { class: 'x', text: '' }), mark = el('div', { class: 'guess', hidden: '' });
+    const plan = el('div', { class: 'plan', style: 'left:' + (100 / SCALE) + '%' });
+    const d = el('div', { class: 'd', text: 'Plan: ' + o.plan });
+    rows.append(el('div', { class: 'r' }, el('div', { class: 'n', text: o.name }), el('div', { class: 'track' }, fill, plan, mark, x), d));
+    cur = { o, fill, x, mark, d, v: 0, guess: null };
+    ask.textContent = o.name + ': planned ' + o.plan + '. When did it quit?'; go.textContent = 'Stop!'; go.hidden = false;
+    t0 = performance.now(); cancelAnimationFrame(raf); raf = requestAnimationFrame(run);
+  }
+  function show(c) { c.fill.style.width = (c.v / SCALE * 100) + '%'; c.x.style.left = (c.v / SCALE * 100) + '%'; c.x.textContent = (c.v < 10 ? c.v.toFixed(1) : Math.round(c.v)) + '× the plan'; }
+  function run(now) {
+    const c = cur; if (!c) return;
+    if (c.guess === null) { c.v = Math.min(SCALE - 2, (now - t0) / 1000 * 9); show(c); if (c.v >= SCALE - 2) stopAt(); }
+    else {                                                          /* after the guess, the bar races on to the real answer */
+      c.v += (c.o.x - c.v) * 0.09; if (Math.abs(c.o.x - c.v) < 0.15) c.v = c.o.x; show(c);
+      if (c.v === c.o.x) { c.d.textContent = 'Plan: ' + c.o.plan + '. Really: ' + c.o.did + '.'; cur = null; setTimeout(next, 1700); return; }
+    }
+    raf = requestAnimationFrame(run);
+  }
+  function stopAt() {
+    const c = cur; if (!c || c.guess !== null) return; c.guess = c.v; go.hidden = true;
+    c.mark.hidden = false; c.mark.style.left = (c.guess / SCALE * 100) + '%';
+    const good = Math.abs(c.guess - c.o.x) <= Math.max(3, c.o.x * 0.25); if (good) close++;
+    dots.children[i].className = good ? 'ok' : 'miss'; answer(good);
+    ask.textContent = c.guess < c.o.x ? 'It kept going!' : 'Not quite that long.';
+  }
+  go.addEventListener('click', () => { if (cur && cur.guess === null) stopAt(); else if (!cur) next(); });
 })();
 
-/* ───────────────────────── Quiz ───────────────────────── */
+/* ───────────────────────── Last stop: real or fake? ───────────────────────── */
 (function () {
-  const box = $('#quiz-box'); let done = 0, right = 0;
-  const score = el('p', { class: 'score', 'aria-live': 'polite', text: 'Answered 0 of ' + LBF.QUIZ.length });
-  LBF.QUIZ.forEach((q, qi) => {
-    const why = el('p', { class: 'why' });
-    const as = el('div', { class: 'as' });
-    q.a.forEach((a, ai) => as.append(el('button', { type: 'button', text: a, onclick: e => {
-      $$('button', as).forEach(b => b.disabled = true);
-      const ok = ai === q.ok; done++; if (ok) right++; G.react(ok ? 'yes' : 'no');
-      e.currentTarget.classList.add(ok ? 'right' : 'wrong');
-      as.children[q.ok].classList.add('right');
-      why.textContent = (ok ? 'Correct. ' : 'Not this time. ') + q.why;
-      if (done === LBF.QUIZ.length) {
-        const rank = right === done ? 'Chief Inspector' : right >= 4 ? 'Detective' : 'Junior Detective';
-        score.textContent = right + ' of ' + done + '. Badge earned: ' + rank + '.';
-        Notebook.badge('quiz');
-        say(right === done ? "A perfect score. You could run this agency, kid." : "Case closed. You earned your badge, partner.", true);
-      } else score.textContent = 'Answered ' + done + ' of ' + LBF.QUIZ.length;
-    } })));
-    box.append(el('fieldset', { class: 'qcard' }, el('legend', { text: (qi + 1) + '. ' + q.q }), as, why));
-  });
-  box.append(score);
+  const box = $('#quiz-box'), list = LBF.REAL; let order = [], i = 0, right = 0;
+  const dots = dotsRow(list.length), card = el('div', { class: 'claim' }), why = el('p', { class: 'why' });
+  const bReal = el('button', { class: 'btn big real', text: 'Real' }), bFake = el('button', { class: 'btn big fake', text: 'Fake' }), again = el('button', { class: 'btn', text: 'Play again', hidden: '' });
+  box.append(el('div', { class: 'game' }, dots, card, el('div', { class: 'row' }, bReal, bFake, again), why));
+  function show() {
+    if (i >= order.length) {
+      const rank = right === order.length ? 'Chief Inspector' : right >= 6 ? 'Detective' : 'Junior Detective';
+      card.textContent = right + ' of ' + order.length + '. Badge: ' + rank + '.'; why.textContent = ''; bReal.hidden = bFake.hidden = true; again.hidden = false;
+      Notebook.badge('quiz'); Sfx.win();
+      say(right === order.length ? "A perfect score. You could run this agency, kid." : "Case closed. You earned your badge, partner.", true); return;
+    }
+    card.textContent = order[i][0]; card.className = 'claim'; why.textContent = ''; bReal.disabled = bFake.disabled = false;
+  }
+  function pick(real) {
+    const q = order[i], good = real === q[1]; if (good) right++; answer(good);
+    dots.children[i].className = good ? 'ok' : 'miss'; card.className = 'claim ' + (q[1] ? 'isreal' : 'isfake');
+    why.textContent = (q[1] ? 'Real. ' : 'Fake. ') + q[2]; bReal.disabled = bFake.disabled = true;
+    i++; setTimeout(show, 2600);
+  }
+  function start() { order = shuffle(list); i = 0; right = 0; $$('span', dots).forEach(d => d.className = ''); bReal.hidden = bFake.hidden = false; again.hidden = true; show(); }
+  bReal.addEventListener('click', () => pick(true)); bFake.addEventListener('click', () => pick(false)); again.addEventListener('click', start);
+  start();
 })();
 
 /* ───────────────────────── Sources ───────────────────────── */
@@ -315,33 +363,83 @@ LBF.SOURCES.forEach(g => {
 const LIGHT = 299792.458, NEAR = 363300, FAR = 405500;
 const MIRRORS = [['apollo11', 'Apollo 11'], ['apollo14', 'Apollo 14'], ['apollo15', 'Apollo 15'], ['blueghost', 'Blue Ghost']];
 const laser = { t0: 0, total: 0, firing: false, frac: 0 };
-MIRRORS.forEach(([id, label], i) => $('#mirror-opts').append(el('label', {}, el('input', Object.assign({ type: 'radio', name: 'mirror', value: id, id: 'mir-' + id }, i === 2 ? { checked: '' } : {})), el('span', { text: label }))));
+const echo = { round: 0, close: 0, dots: dotsRow(3), msg: $('#echo-msg') };
+$('#echo-dots').append(echo.dots);
+function echoEnd(t) {                                   /* t = when the child pressed Catch, or null if they never did */
+  const diff = t === null ? 9 : t - laser.total, a = Math.abs(diff), good = a < 0.3;
+  laser.firing = false; laser.frac = 0; if (good) echo.close++;
+  echo.dots.children[echo.round].className = good ? 'ok' : 'miss'; echo.round++; answer(good);
+  $('#echo').textContent = laser.total.toFixed(2) + ' s';
+  echo.msg.textContent = t === null ? 'It came back and you missed it!' : a < 0.12 ? 'Bullseye!' : (diff < 0 ? 'Too early by ' : 'Too late by ') + a.toFixed(2) + ' s';
+  const km = Math.round(laser.d).toLocaleString('en-US');
+  $('#dist').textContent = 'There and back in ' + laser.total.toFixed(2) + ' s. The Moon is ' + km + ' km away.';
+  if (echo.round >= 3) {
+    $('#fire').textContent = 'Play again'; Notebook.badge('laser'); Sfx.win();
+    say("Echo received. That's how scientists know the Moon is slipping away from us, 3.8 cm a year.", true);
+  } else $('#fire').textContent = 'Fire again';
+}
 $('#fire').addEventListener('click', () => {
-  if (laser.firing) return;
-  const d = NEAR + (FAR - NEAR) * ($('#orbit').value / 100);
-  laser.total = 2 * d / LIGHT; laser.d = d; laser.t0 = performance.now(); laser.firing = true;
-  $('#dist').textContent = 'Pulse on its way…'; $('#fire').disabled = true;
+  if (laser.firing) { echoEnd((performance.now() - laser.t0) / 1000); return; }
+  if (echo.round >= 3) { echo.round = 0; echo.close = 0; $$('span', echo.dots).forEach(d => d.className = ''); }
+  const d = NEAR + (FAR - NEAR) * Math.random();
+  laser.total = 2 * d / LIGHT; laser.d = d; laser.t0 = performance.now(); laser.firing = true; Sfx.zap();
+  echo.msg.textContent = 'Watch the light…'; $('#dist').textContent = ''; $('#fire').textContent = 'Catch the echo!';
 });
 function laserStep(now) {
   if (!laser.firing) return;
   const t = (now - laser.t0) / 1000;
-  if (t >= laser.total) {
-    laser.firing = false; laser.frac = 0; $('#fire').disabled = false;
-    $('#echo').textContent = laser.total.toFixed(3) + ' s';
-    const km = Math.round(laser.d).toLocaleString('en-US');
-    const who = MIRRORS.find(m => m[0] === ($('input[name=mirror]:checked') || {}).value) || MIRRORS[2];
-    $('#dist').textContent = '299,792 km/s × ' + laser.total.toFixed(3) + ' s ÷ 2 = ' + km + ' km to the ' + who[1] + ' mirror.';
-    say("Echo received. That's how scientists know the Moon is slipping away from us, 3.8 cm a year.", true);
-    Notebook.badge('laser');
-  } else {
-    $('#echo').textContent = t.toFixed(3) + ' s';
-    const f = t / laser.total; laser.frac = f < .5 ? f * 2 : 2 - f * 2;
-  }
+  $('#echo').textContent = t.toFixed(2) + ' s';
+  if (t >= laser.total + 1.2) { echoEnd(null); return; }
+  const f = Math.min(1, t / laser.total); laser.frac = f < .5 ? f * 2 : 2 - f * 2;
 }
 
 /* ───────────────────────── 3D ───────────────────────── */
 let three = false, showModel = function () {};
 try { three = init3D(); } catch (err) { console.warn('3D unavailable:', err); }
+
+/* Stop 3: find each robot on Mars. Hy names one, you click its light. Wrong lights tell you who they are. */
+(function () {
+  const box = $('#g-mars'); if (!box) return; if (!globes.mars) { box.hidden = true; return; }
+  const N = 5, dots = dotsRow(N), ask = el('p', { class: 'ask', text: 'Can you find 5 robots on Mars?' }), go = el('button', { class: 'btn big', text: 'Start' }), hint = el('p', { class: 'why' });
+  box.append(ask, el('div', { class: 'row' }, go, dots), hint);
+  let order = [], i = 0, misses = 0, first = 0;
+  const g = () => globes.mars;
+  function round() {
+    if (i >= N) { g().onPick = null; ask.textContent = first + ' of ' + N + ' on the first try!'; hint.textContent = ''; go.textContent = 'Play again'; go.hidden = false; Notebook.badge('pin'); Sfx.win(); say('You know Mars like a local.', true); return; }
+    misses = 0; ask.textContent = 'Click on: ' + order[i].name; hint.textContent = '';
+  }
+  go.addEventListener('click', () => {
+    if (!g()) return;
+    order = shuffle(C.filter(c => c.world === 'mars')).slice(0, N); i = 0; first = 0; go.hidden = true;
+    $$('span', dots).forEach(d => d.className = ''); C.forEach(c => c.world === 'mars' && g().mark(c.id, 0xffffff));
+    g().onPick = id => {
+      const t = order[i]; if (!t) return;
+      if (id === t.id) { answer(true); if (!misses) first++; dots.children[i].className = misses ? 'miss' : 'ok'; g().mark(id, 0x4be37a); g().focus(id); renderFile(t); i++; hint.textContent = 'Found it!'; setTimeout(round, 1300); }
+      else { answer(false); misses++; g().mark(id, 0xff5a4d); hint.textContent = 'That one is ' + byId[id].name + '. Try another.'; if (misses >= 2) g().focus(t.id); }
+    };
+    say('I name a robot. You click its light.', true); round();
+  });
+})();
+
+/* Stop 4: whose shadow is this? The model is blacked out until you name it. */
+(function () {
+  const box = $('#g-models'); if (!box) return; if (!LBF.shadow) { box.hidden = true; return; }
+  const keys = Object.keys(LBF.MODELS), N = Math.min(5, keys.length), dots = dotsRow(N);
+  const ask = el('p', { class: 'ask', text: 'Can you name a machine by its shadow?' }), go = el('button', { class: 'btn big', text: 'Start' }), choices = el('div', { class: 'choices' });
+  box.append(ask, el('div', { class: 'row' }, go, dots), choices);
+  let order = [], i = 0, right = 0;
+  function round() {
+    const hangar = $('#models .hangar');
+    if (i >= N) { LBF.shadow(false); hangar.classList.remove('playing'); choices.replaceChildren(); ask.textContent = right + ' of ' + N + '. Now spin them yourself.'; go.textContent = 'Play again'; go.hidden = false; Notebook.badge('shadow'); Sfx.win(); say('Good eye, detective.', true); return; }
+    const key = order[i]; let missed = false; hangar.classList.add('playing'); LBF.shadow(true); showModel(key); ask.textContent = 'Whose shadow is this? Spin it.';
+    choices.replaceChildren(...shuffle([key].concat(shuffle(keys.filter(k => k !== key)).slice(0, 2))).map(k => el('button', { class: 'btn ghost', text: LBF.MODELS[k].name, onclick: e => {
+      if (k !== key) { answer(false); missed = true; e.currentTarget.disabled = true; return; }
+      answer(true); if (!missed) right++; dots.children[i].className = missed ? 'miss' : 'ok'; LBF.shadow(false); ask.textContent = LBF.MODELS[key].name + '!';
+      $$('button', choices).forEach(b => b.disabled = true); i++; setTimeout(round, 2200);
+    } })));
+  }
+  go.addEventListener('click', () => { order = shuffle(keys).slice(0, N); i = 0; right = 0; go.hidden = true; $$('span', dots).forEach(d => d.className = ''); say('Whose shadow is this?', true); round(); });
+})();
 if (!three) {
   document.body.classList.add('no3d');
   (function loop(now) { laserStep(now); requestAnimationFrame(loop); })(performance.now());
@@ -427,13 +525,13 @@ function init3D() {
         target.y += dx * 0.006; target.x = Math.max(-1.35, Math.min(1.35, target.x + dy * 0.006)); idle = 0; tip.style.display = 'none';
       } else {
         const h = pick(e);
-        if (h) { tip.textContent = byId[h.id].name; tip.style.left = h.x + 'px'; tip.style.top = h.y + 'px'; tip.style.display = 'block'; stage.style.cursor = 'pointer'; }
+        if (h && !api.onPick) { tip.textContent = byId[h.id].name; tip.style.left = h.x + 'px'; tip.style.top = h.y + 'px'; tip.style.display = 'block'; stage.style.cursor = 'pointer'; }
         else { tip.style.display = 'none'; stage.style.cursor = ''; }
       }
     });
     const end = e => {
       stage.classList.remove('grabbing');
-      if (drag && drag.moved < 6) { const h = pick(e); if (h) openCase(h.id, { user: true }); }
+      if (drag && drag.moved < 6) { const h = pick(e); if (h) { if (api.onPick) api.onPick(h.id); else openCase(h.id, { user: true }); } }
       drag = null;
     };
     stage.addEventListener('pointerup', end);
@@ -448,6 +546,7 @@ function init3D() {
         target.y = ty; target.x = Math.max(-1.25, Math.min(1.25, la * RAD));
         label.textContent = c.name;
       },
+      mark(id, col) { const p = pins[id]; if (!p) return; const c = col === null ? STATUS_COL[byId[id].status] : col; p.dot.material.color.set(c); p.ring.material.color.set(c); },
       applyFilter(f) { for (const id in pins) pins[id].g.visible = f === 'all' || byId[id].status === f; }
     };
     views.push({ el: stage, scene, cam, update(dt, a, rect) {
@@ -538,6 +637,8 @@ function init3D() {
         document.head.append(sc);
       });
     }
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x1f2740 });
+    LBF.shadow = on => { scene.overrideMaterial = on ? shadowMat : null; };
     const tabs = $('#model-tabs'), note = $('#model-note');
     Object.keys(LBF.MODELS).forEach(key => tabs.append(el('button', { role: 'tab', 'data-k': key, 'aria-selected': 'false', text: LBF.MODELS[key].name, onclick: () => showModel(key) })));
     showModel = function (key) {
@@ -1098,7 +1199,7 @@ function init3D() {
 
 /* ───────────────────────── Detective notebook ───────────────────────── */
 const Notebook = (function () {
-  const BADGES = { first: 'Rookie detective', moon: 'Moon expert', mars: 'Mars expert', laser: 'Laser ranger', mystery: 'Mystery cracked', interview: 'Interviewer', tour: 'Rode along', talk: 'Talked to Hy', quiz: 'Quiz badge', walker: 'Moon walker' };
+  const BADGES = { first: 'Rookie detective', moon: 'Moon expert', mars: 'Mars expert', laser: 'Laser ranger', mystery: 'Mystery cracked', interview: 'Interviewer', tour: 'Rode along', talk: 'Talked to Hy', quiz: 'Quiz badge', walker: 'Moon walker', pin: 'Mars mapper', shadow: 'Shadow spotter', stay: 'Overtime expert' };
   const st = { files: [], badges: [] };
   try {
     const o = JSON.parse(localStorage.getItem('lbf-notebook') || '{}');

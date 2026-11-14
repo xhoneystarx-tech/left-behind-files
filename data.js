@@ -279,6 +279,18 @@ LBF.OVER = [
   { name: "Opportunity", plan: "90 days",    did: "over 14 years",      x: 57 }
 ];
 
+/* Real or fake? Each claim: [text, is it real, one-line reason]. */
+LBF.REAL = [
+  ["A helicopter has flown on Mars.", true, "Ingenuity flew 72 times."],
+  ["Astronauts left cars on the Moon.", true, "Three Moon cars are still parked there."],
+  ["A rover built for 90 days drove for over 14 years.", true, "That was Opportunity."],
+  ["NASA crashed a rocket into the Moon on purpose.", true, "LCROSS did it and found water."],
+  ["The Moon is slowly drifting away from Earth.", true, "3.8 cm every year. The mirrors proved it."],
+  ["The Moon mirrors need new batteries every year.", false, "They need no power at all."],
+  ["People have walked on Mars.", false, "Only robots have been there."],
+  ["Wind has blown away the bootprints on the Moon.", false, "The Moon has no air, so no wind."]
+];
+
 LBF.QUIZ = [
   { q: "Which Apollo experiment is still working today?",
     a: ["The flags", "The laser mirrors", "The Moon cars", "The TV cameras"], ok: 1,
