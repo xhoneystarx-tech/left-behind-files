@@ -34,6 +34,25 @@ const Sfx = (function () {
     zap() { tone(1800, 300, 0.4, 0.08, 'sawtooth'); }, tick() { tone(520, 520, 0.05, 0.08); }
   };
 })();
+/* background music: a quiet playlist for the whole site, with its own track for the Moon walk */
+const Music = (function () {
+  const LIST = ['music', 'm-feelalive', 'm-memories', 'm-latenight', 'm-falling'], a = new Audio(); a.preload = 'none';
+  let on = true, started = false, i = Math.floor(Math.random() * LIST.length), special = null;
+  const btn = document.getElementById('music');
+  const load = () => { a.src = 'audio/' + (special || LIST[i % LIST.length]) + '.mp3'; a.loop = !!special; };
+  const play = () => { if (!on || !started) return; if (!a.src) load(); a.play().catch(() => {}); };
+  a.addEventListener('ended', () => { i++; load(); play(); });
+  const label = () => { if (btn) { btn.textContent = on ? 'Music on' : 'Music off'; btn.setAttribute('aria-pressed', on); } };
+  if (btn) btn.addEventListener('click', () => api.set(!on));
+  setInterval(() => { const want = guideState.voice ? 0.06 : 0.2; a.volume += (want - a.volume) * 0.25; }, 120);   /* duck under Hy's voice */
+  const first = () => { started = true; play(); removeEventListener('pointerdown', first); removeEventListener('keydown', first); };
+  addEventListener('pointerdown', first); addEventListener('keydown', first);                                  /* browsers only allow sound after a tap */
+  const api = {
+    isOn: () => on, set(v) { on = !!v; label(); if (on) play(); else a.pause(); },
+    scene(name) { if (special === name) return; special = name; load(); play(); }                               /* name = track for a quest, or null for the playlist */
+  };
+  a.volume = 0.2; label(); return api;
+})();
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const dotsRow = n => { const d = el('div', { class: 'dots' }); for (let i = 0; i < n; i++) d.append(el('span')); return d; };
 const answer = good => { if (good) Sfx.yes(); else Sfx.no(); G.react(good ? 'yes' : 'no'); };
@@ -671,33 +690,81 @@ function init3D() {
   (function () {
     const stage = $('#walk-stage'), box = $('#walk'), R = 10;
     const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(52, 1, 0.1, 500);
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(R, 128, 96), globeMat(moonTex)));
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x30343c, 0.45));
+    (function () {      /* a ball made from a cube, so the crater texture stays sharp and even everywhere, poles included */
+      const geo = new THREE.BoxGeometry(2, 2, 2, 48, 48, 48), pa = geo.attributes.position, na = geo.attributes.normal, v = new THREE.Vector3();
+      for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).normalize(); na.setXYZ(i, v.x, v.y, v.z); pa.setXYZ(i, v.x * R, v.y * R, v.z * R); }
+      const map = tex('moonsurf.jpg'), bump = texLoader.load('assets/moonbump.jpg');
+      [map, bump].forEach(t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 4); t.anisotropy = 8; });
+      scene.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: 0.05, roughness: 1, metalness: 0, color: 0xdcdce4 })));
+    })();
+    scene.add(new THREE.HemisphereLight(0xcfc8ff, 0x30343c, 0.6));
     const sun = new THREE.DirectionalLight(0xffffff, 1.15); sun.position.set(30, 22, 18); scene.add(sun);
     /* the sky: a big blue Earth, twinkling stars, shooting stars and an orbiter passing overhead */
     const earth = new THREE.Mesh(new THREE.SphereGeometry(13, 64, 48), globeMat(tex('earth.jpg'))); scene.add(earth);
-    const halo = new THREE.Mesh(new THREE.SphereGeometry(14.2, 48, 32), new THREE.MeshBasicMaterial({ color: 0x4f9dff, transparent: true, opacity: 0.22, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false })); earth.add(halo);
-    const starLayers = [0, 1, 2].map(n => {
-      const N = 500, a = new Float32Array(N * 3); let sd = 11 + n * 97; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(14.2, 48, 32), new THREE.MeshBasicMaterial({ color: 0x6fb4ff, transparent: true, opacity: 0.3, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false })); halo.scale.setScalar(0.955); earth.add(halo);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(420, 48, 32), new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, uniforms: { up: { value: new THREE.Vector3(0, 1, 0) } },
+      vertexShader: 'varying vec3 d; void main(){ d = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 up; varying vec3 d; void main(){ float h = dot(normalize(d), up);' +
+        ' vec3 top = vec3(0.03, 0.025, 0.14), mid = vec3(0.11, 0.08, 0.34), low = vec3(0.27, 0.21, 0.6), glow = vec3(0.46, 0.38, 0.8);' +
+        ' vec3 c = mix(mid, top, smoothstep(0.25, 0.95, h)); c = mix(low, c, smoothstep(-0.02, 0.34, h)); c = mix(glow, c, smoothstep(-0.12, 0.07, h));' +
+        ' c = mix(vec3(0.06, 0.05, 0.2), c, smoothstep(-0.6, -0.12, h)); gl_FragColor = vec4(c, 1.0); }'
+    })); dome.renderOrder = -2; dome.frustumCulled = false; scene.add(dome);
+    const starTex = (spikes) => {
+      const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,.9)'); gr.addColorStop(0.45, 'rgba(200,210,255,.25)'); gr.addColorStop(1, 'rgba(200,210,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      if (spikes) { g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(32, 2); g.lineTo(32, 62); g.moveTo(2, 32); g.lineTo(62, 32); g.stroke(); }
+      return new THREE.CanvasTexture(c);
+    };
+    const dotTex = starTex(false), sparkTex = starTex(true);
+    const starLayers = [[700, 3, 0xffffff, dotTex], [420, 5, 0xcfe0ff, dotTex], [160, 9, 0xffffff, dotTex], [70, 15, 0xfff0d0, sparkTex], [36, 24, 0xdfe8ff, sparkTex]].map(([N, size, color, map], n) => {
+      const a = new Float32Array(N * 3); let sd = 11 + n * 97; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
       for (let i = 0; i < N; i++) { const u = rnd() * 2 - 1, t = rnd() * 6.2832, q = Math.sqrt(1 - u * u); a[i * 3] = q * Math.cos(t) * 300; a[i * 3 + 1] = u * 300; a[i * 3 + 2] = q * Math.sin(t) * 300; }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3));
-      const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: [0xffffff, 0xbfd8ff, 0xffe2b0][n], size: [1.6, 2.2, 2.8][n], sizeAttenuation: false, transparent: true, depthWrite: false })); scene.add(pts); return pts;
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({ color, size, map, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); pts.frustumCulled = false; scene.add(pts); return pts;
     });
+    /* the Big Dipper: seven bright stars, placed in the sky beside Earth */
+    const dipper = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0xffffff, size: 30, map: sparkTex, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); dipper.frustumCulled = false; scene.add(dipper);
+    const DIP = [[0, 0], [1.5, 0.75], [2.6, 0.95], [3.8, 1.05], [4.25, 0.0], [5.9, 0.2], [5.8, 1.55]];
+    function placeDipper(fwd, upv) {       /* called when the walk starts, once the player's starting view is known */
+      const side = new THREE.Vector3().crossVectors(upv, fwd).normalize(), c = fwd.clone().multiplyScalar(0.72).addScaledVector(upv, 0.62).addScaledVector(side, -0.42).normalize(), a = new Float32Array(21);
+      const u2 = upv.clone().addScaledVector(c, -upv.dot(c)).normalize(), s2 = new THREE.Vector3().crossVectors(u2, c).normalize();
+      DIP.forEach(([x, y], i) => { const p = c.clone().addScaledVector(s2, (x - 3) * 0.085).addScaledVector(u2, (y - 0.6) * 0.085).normalize().multiplyScalar(290); a[i * 3] = p.x; a[i * 3 + 1] = p.y; a[i * 3 + 2] = p.z; });
+      dipper.geometry.setAttribute('position', new THREE.BufferAttribute(a, 3));
+    }
     const meteors = [0, 1, 2].map(() => {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.5, 26, 5), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
       m.userData = { t: 9, wait: 1 + Math.random() * 4, from: new THREE.Vector3(), vel: new THREE.Vector3() }; scene.add(m); return m;
     });
     const orbiter = new THREE.Group();
     (function () {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.45), new THREE.MeshStandardMaterial({ color: 0xd9b25a, metalness: 0.8, roughness: 0.3, emissive: 0x4a3a10 })); orbiter.add(b);
-      const pm = new THREE.MeshStandardMaterial({ color: 0x2a4a9a, metalness: 0.5, roughness: 0.3, emissive: 0x0a1a40 });
-      [-1, 1].forEach(sg => { const w = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.02, 0.32), pm); w.position.x = sg * 0.52; orbiter.add(w); });
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff5a4d })); lamp.position.y = -0.2; orbiter.add(lamp); orbiter.userData.lamp = lamp;
+      const pc = document.createElement('canvas'); pc.width = 256; pc.height = 128; const g = pc.getContext('2d');
+      g.fillStyle = '#c9d2e6'; g.fillRect(0, 0, 256, 128);
+      for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) { const gr = g.createLinearGradient(i * 32, j * 32, i * 32 + 32, j * 32 + 32); gr.addColorStop(0, '#2f56c8'); gr.addColorStop(1, '#16276e'); g.fillStyle = gr; g.fillRect(i * 32 + 2, j * 32 + 2, 28, 28); }
+      const pt = new THREE.CanvasTexture(pc); pt.encoding = THREE.sRGBEncoding;
+      const panelM = new THREE.MeshStandardMaterial({ map: pt, emissiveMap: pt, emissive: 0x6677aa, metalness: 0.4, roughness: 0.35 });
+      const foil = new THREE.MeshStandardMaterial({ color: 0xe0b04a, metalness: 0.9, roughness: 0.3, emissive: 0x5a4010, flatShading: true });
+      const shell = new THREE.MeshStandardMaterial({ color: 0xf2f2f0, metalness: 0.2, roughness: 0.5, emissive: 0x333338 }), metal = new THREE.MeshStandardMaterial({ color: 0x9aa0ab, metalness: 0.8, roughness: 0.35, emissive: 0x1c1e24 });
+      const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); orbiter.add(m); return m; };
+      add(new THREE.CylinderGeometry(0.2, 0.2, 0.5, 14), shell).rotation.x = Math.PI / 2;                 /* body */
+      add(new THREE.CylinderGeometry(0.23, 0.23, 0.22, 9), foil, 0, 0, -0.3).rotation.x = Math.PI / 2;    /* gold foil section */
+      add(new THREE.BoxGeometry(0.26, 0.26, 0.2), foil, 0, 0, 0.32);
+      [-1, 1].forEach(sg => {
+        add(new THREE.CylinderGeometry(0.015, 0.015, 0.34, 6), metal, sg * 0.36, 0, 0).rotation.z = Math.PI / 2;            /* boom */
+        [0, 1].forEach(k => { const w = add(new THREE.BoxGeometry(0.62, 0.015, 0.4), panelM, sg * (0.84 + k * 0.66), 0, 0); w.rotation.x = 0.35; });
+      });
+      const dish = add(new THREE.SphereGeometry(0.2, 16, 8, 0, Math.PI * 2, 0, 1.0), new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.4, emissive: 0x44444a, side: THREE.DoubleSide }), 0, 0.3, 0.05); dish.rotation.x = Math.PI;
+      add(new THREE.CylinderGeometry(0.01, 0.01, 0.2, 5), metal, 0, 0.2, 0.05);
+      const lamp = add(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff5a4d }), 0, -0.24, 0); orbiter.userData.lamp = lamp;
+      orbiter.scale.setScalar(1.5);
     })();
     scene.add(orbiter);
     function skyStep(dt) {
       earth.rotation.y += dt * 0.05;
-      starLayers.forEach((p, n) => { p.material.opacity = 0.55 + 0.45 * Math.sin(clock * (0.9 + n * 0.7) + n * 2); p.rotation.y += dt * 0.004 * (n + 1); });
+      dome.position.copy(cam.position); dome.material.uniforms.up.value.copy(pos);
+      starLayers.forEach((p, n) => { p.material.opacity = 0.6 + 0.4 * Math.sin(clock * (0.8 + n * 0.55) + n * 2); p.rotation.y += dt * 0.003 * (n % 3 + 1); });
+      dipper.material.opacity = 0.85 + 0.15 * Math.sin(clock * 2.2);
       meteors.forEach(m => {
         const u = m.userData; u.t += dt;
         if (u.t > u.wait + 1.1) {                                  /* launch a new streak somewhere in the sky above the player */
@@ -708,7 +775,7 @@ function init3D() {
         }
         if (u.t < 1.1) { m.position.copy(u.from).addScaledVector(u.vel, u.t); m.material.opacity = Math.sin(u.t / 1.1 * Math.PI) * 0.9; } else m.material.opacity = 0;
       });
-      const a = clock * 0.22; orbiter.position.set(Math.cos(a) * (R + 4.2), Math.sin(a * 0.7) * 3, Math.sin(a) * (R + 4.2)); orbiter.lookAt(0, 0, 0); orbiter.rotation.z += 0.6;
+      const a = clock * 0.22; orbiter.position.set(Math.cos(a) * (R + 3.6), Math.sin(a * 0.7) * 3, Math.sin(a) * (R + 3.6)); orbiter.up.set(0, 1, 0); orbiter.lookAt(0, 0, 0); orbiter.rotateZ(0.5); orbiter.rotateY(clock * 0.15);
       orbiter.userData.lamp.visible = (clock % 1.2) < 0.25;
     }
     const M = (color, o) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.75, metalness: 0.05 }, o || {}));
@@ -909,7 +976,6 @@ function init3D() {
     }
 
     /* sound: music from the team's folder plus small synth effects */
-    const music = new Audio('audio/music.mp3'); music.loop = true; music.volume = 0.22; music.preload = 'none';
     let actx = null, soundOn = true;
     function tone(f0, f1, dur, vol, type, delay) {
       if (!soundOn) return;
@@ -928,7 +994,7 @@ function init3D() {
       yes() { tone(660, 660, 0.12, 0.15, 'triangle'); tone(990, 990, 0.22, 0.15, 'triangle', 0.11); }, no() { tone(210, 150, 0.3, 0.12, 'square'); },
       boom() { tone(140, 30, 0.7, 0.35, 'sawtooth'); }, zap() { tone(1800, 300, 0.5, 0.1, 'sawtooth'); }
     };
-    const soundBtn = el('button', { class: 'btn ghost', id: 'walk-sound', text: 'Sound: on', onclick: () => { soundOn = !soundOn; soundBtn.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); if (soundOn && active) music.play().catch(() => {}); else music.pause(); } });
+    const soundBtn = el('button', { class: 'btn ghost', id: 'walk-sound', text: 'Sound: on', onclick: () => { soundOn = !soundOn; soundBtn.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); Music.set(soundOn); } });
     box.append(soundBtn);
 
     /* Moon rocks to pick up on the way, like the Apollo crews did. They lead toward the four machines. */
@@ -938,7 +1004,7 @@ function init3D() {
       d.addScaledVector(side, ((m + n) % 2 ? 1 : -1) * 0.035).normalize();
       const g = new THREE.Group(); g.position.copy(d).multiplyScalar(R + 0.45);
       const core = new THREE.Mesh(rockGeo, new THREE.MeshStandardMaterial({ color: 0xffd36b, emissive: 0xc77a10, roughness: 0.4, flatShading: true }));
-      const glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color: 0xffc44d, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color: 0xffc44d, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }));
       g.add(core, glow); scene.add(g); rocks.push({ g, d, core, glow, got: false, t: 0, ph: n * 1.7 + m });
     }));
     const rockCount = el('span', { class: 'rocks', text: '' }); $('#walk .hud').append(rockCount);
@@ -990,9 +1056,9 @@ function init3D() {
     let jumpT = -1, jumpY = 0, jumpV = 0, landT = 9, camYaw = 0, camPitch = 0.3, look = null, lookIdle = 9, learned = [];
     function reset() {
       pos.copy(START); headDir.set(0, 0, -1); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize();
-      earth.position.copy(pos).multiplyScalar(R + 2).addScaledVector(headDir, 100);      /* Earth hangs low over the horizon ahead */
+      earth.position.copy(pos).multiplyScalar(R + 2).addScaledVector(headDir, 100); placeDipper(headDir, pos);      /* Earth hangs low over the horizon ahead */
       zoom = 0; got = {}; learned = []; paused = false; speed = 0; phase = 0; cheer = -1; jumpT = -1; jumpY = 0; camYaw = 0; camPitch = 0.3; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.35; if (s.flag) { s.up.remove(s.flag); s.flag = null; } if (s.fx) { (s.fx.parent || scene).remove(s.fx); s.fx = null; } (s.dust || []).forEach(d => s.up.remove(d)); s.dust = null; s.model.position.set(0, 0, 0); s.model.rotation.y = 0; });
-      rocks.forEach(r => { r.got = false; r.g.visible = true; r.g.scale.setScalar(1); r.core.material.opacity = 1; r.core.material.transparent = false; r.glow.material.opacity = 0.22; }); rocksGot = 0; rockCount.textContent = 'Moon rocks: 0 / ' + rocks.length;
+      rocks.forEach(r => { r.got = false; r.g.visible = true; r.g.scale.setScalar(1); r.core.material.opacity = 1; r.core.material.transparent = false; r.glow.material.opacity = 0.12; }); rocksGot = 0; rockCount.textContent = 'Moon rocks: 0 / ' + rocks.length;
       const list = $('#walk-list'); list.replaceChildren(); rows = {};
       NEED.forEach(([k, label, st]) => { const li = el('li', { class: 's-' + st }, el('span', { class: 'arrow', text: '▲' }), el('span', { text: label }), el('span', { class: 'tick', text: '' })); rows[k] = li; list.append(li); });
       $('#walk-found').hidden = true;
@@ -1044,9 +1110,9 @@ function init3D() {
     function start() {
       reset(); active = true; box.hidden = false; document.body.classList.add('questing'); Missions.stopAll && Missions.stopAll();
       say('Find all four. Remember them. I will ask.', true);
-      if (soundOn) { try { music.currentTime = 0; } catch (_) {} music.play().catch(() => {}); }
+      soundOn = Music.isOn(); soundBtn.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); Music.scene('m-aurora');
     }
-    function stop() { music.pause(); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
+    function stop() { Music.scene(null); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
     LBF.walk = { start, stop, quiz(ids) { learned = ids; debrief(0, 0); }, warp(v) { pos.copy(typeof v === 'number' ? rocks[v].d : sites.find(x => x.c.id === v).dir); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize(); } };
     const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Space: 'jump' };
     addEventListener('keydown', e => { if (!active || !KEYMAP[e.code] || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; keys[KEYMAP[e.code]] = 1; e.preventDefault(); });

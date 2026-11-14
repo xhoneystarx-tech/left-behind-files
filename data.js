@@ -343,7 +343,13 @@ LBF.SOURCES = [
     ["NASA SVS: CGI Moon Kit (the higher-quality NASA Moon map)", "https://svs.gsfc.nasa.gov/4720"] ] },
   { group: "Cross-checks outside NASA", items: [
     ["The Planetary Society: Mars landing site coordinates", "https://www.planetary.org/space-images/mars_landing_site_map_lakdawalla"],
-    ["Eos: lunar laser ranging explained", "https://eos.org/features/seeing-the-light"] ] }
+    ["Eos: lunar laser ranging explained", "https://eos.org/features/seeing-the-light"] ] },
+  { group: "Music", items: [
+    ["Luke Bergs: Aurora (freetouse.com)", "https://freetouse.com/music"],
+    ["Nebulite: Feel Alive (freetouse.com)", "https://freetouse.com/music"],
+    ["Nebulite: Memories (freetouse.com)", "https://freetouse.com/music"],
+    ["Spiring: Late Night (freetouse.com)", "https://freetouse.com/music"],
+    ["tubebackr: Falling (freetouse.com)", "https://freetouse.com/music"] ] }
 ];
 
 LBF.coordText = function (c) {
