@@ -44,7 +44,7 @@ const Music = (function () {
   a.addEventListener('ended', () => { i++; load(); play(); });
   const label = () => { if (btn) { btn.textContent = on ? 'Music on' : 'Music off'; btn.setAttribute('aria-pressed', on); } };
   if (btn) btn.addEventListener('click', () => api.set(!on));
-  setInterval(() => { const want = guideState.voice ? 0.06 : 0.2; a.volume += (want - a.volume) * 0.25; }, 120);   /* duck under Hy's voice */
+  setInterval(() => { const want = guideState.voice ? 0.1 : 0.2; a.volume += (want - a.volume) * 0.25; }, 120);   /* duck under Hy's voice */
   const first = () => { started = true; play(); removeEventListener('pointerdown', first); removeEventListener('keydown', first); };
   addEventListener('pointerdown', first); addEventListener('keydown', first);                                  /* browsers only allow sound after a tap */
   const api = {
