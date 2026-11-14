@@ -693,6 +693,106 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
   #rove .lab3d.big{margin-left:-70px}
 }
 /* rove css end */
+/* v3 css begin */
+/* a tick in the top bar for each finished quest */
+.bar nav a.done::after{content:" \2713";color:#4be37a}
+#fin-left{margin:26px 0 12px}
+#fin-open[hidden]{display:none}
+/* Hy's chat: question buttons only, no typing */
+#chat.open{display:flex;flex-direction:column}
+#chat header{flex:none}
+#log{flex:1 1 auto;min-height:60px}
+#chat .qs{flex:0 0 auto;padding:10px 14px 12px;gap:6px;flex-wrap:wrap;overflow:auto;max-height:44%;border-top:1px solid #b9b5a6;align-content:flex-start}
+#chat .qs button{white-space:normal;flex:0 1 auto;text-align:left}
+#chat .qs button:hover{border-color:var(--ink);background:#d5d1c3}
+.msg.help{border-left:4px solid #ff9a3d}
+.msg .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+/* inside a quest the chat is a small note, so the game stays in view */
+body.questing #chat{height:auto;max-height:min(400px,calc(100% - 226px))}
+body.questing #chat .qs{max-height:96px}
+body.questing #log{max-height:210px}
+@media (max-width:760px){
+  body.questing #chat{top:8px;bottom:auto;max-height:44%}
+}
+/* ── the ending ── */
+#finale{position:fixed;inset:0;z-index:90;overflow:hidden;color:var(--chalk);--bar:9vh;--hw:min(40vh,74vw,380px);--mw:min(17vh,136px);animation:fin-in 1.1s ease-out both}
+#finale[hidden]{display:none}
+@keyframes fin-in{from{background:#000}to{background:rgba(0,0,0,0)}}
+body.finale-on #guide,body.finale-on #guide-show,body.finale-on #toast,body.finale-on #chat{display:none}
+body.no3d #finale{animation:none;background:#000}
+#fin-stage{position:absolute;inset:0;z-index:-1;pointer-events:none}
+.fin-bar{position:absolute;left:0;right:0;height:var(--bar);background:#000;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.fin-bar.top{top:0;transform:translateY(-100%)}.fin-bar.bot{bottom:0;transform:translateY(100%)}
+#finale.go .fin-bar{transform:none}
+#fin-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#fin-hy{position:absolute;left:50%;top:40%;width:var(--hw);aspect-ratio:1;translate:-50% -50%;scale:.2;opacity:0;transition:scale .8s cubic-bezier(.34,1.56,.64,1),opacity .35s}
+#fin-hy.in{scale:1;opacity:1}
+#fin-hy.gone{display:none}
+#fin-hy .bob{position:absolute;inset:0;animation:fin-bob 3.2s ease-in-out infinite}
+#fin-hy video{position:absolute;inset:0;width:100%;height:100%;opacity:0;-webkit-mask-image:radial-gradient(circle,#000 50%,transparent 69%);mask-image:radial-gradient(circle,#000 50%,transparent 69%)}
+#fin-hy video.on{opacity:1}
+@keyframes fin-bob{0%,100%{transform:translateY(-1.2%)}50%{transform:translateY(1.6%)}}
+/* he squats a little first (anticipation), then shoots off and shrinks to a point among the stars */
+#fin-hy.away{animation:fin-away 1.5s forwards}
+@keyframes fin-away{
+  0%{translate:-50% -50%;scale:1;animation-timing-function:ease-out}
+  16%{translate:-50% calc(-50% + 2.4vh);scale:1.08 .92;animation-timing-function:cubic-bezier(.55,0,.85,.45)}
+  100%{translate:calc(-50% + 9vw) calc(-50% - 31vh);scale:.035}
+}
+#fin-star{position:absolute;left:calc(50% + 9vw);top:calc(40% - 31vh);width:0;height:0;opacity:0}
+#fin-star::before,#fin-star::after{content:"";position:absolute;left:-46px;top:-1.5px;width:92px;height:3px;border-radius:3px;background:radial-gradient(closest-side,#fff,rgba(255,196,120,.9) 40%,transparent)}
+#fin-star::after{transform:rotate(90deg)}
+#fin-star.on{animation:fin-twinkle .9s ease-out both}
+@keyframes fin-twinkle{0%{opacity:0;transform:scale(.1) rotate(0)}35%{opacity:1;transform:scale(1.25) rotate(40deg)}100%{opacity:0;transform:scale(.2) rotate(90deg)}}
+/* the medal: it leaves Hy's hands, spins down, lands with a squash, and later moves aside for the credits */
+#fin-medal{position:absolute;left:50%;top:40%;width:var(--mw);translate:-50% -50%;display:grid;justify-items:center;gap:6px;transition:top 1.25s cubic-bezier(.5,0,.6,1),left .9s cubic-bezier(.2,.8,.2,1),width .9s cubic-bezier(.2,.8,.2,1)}
+#fin-medal[hidden]{display:none}
+#fin-medal.fly{top:66%}
+#fin-medal .m{position:relative;width:100%;transform:scale(0)}
+#fin-medal svg{display:block;width:100%;height:auto;filter:drop-shadow(0 6px 18px rgba(255,170,60,.45))}
+#fin-medal.fly .m{animation:fin-spin 1.25s cubic-bezier(.3,.1,.3,1) both}
+#fin-medal.fly.landed .m{animation:fin-squash .55s ease-out both}
+@keyframes fin-spin{0%{transform:perspective(600px) translateY(0) scale(0) rotateY(0)}35%{transform:perspective(600px) translateY(-9vh) scale(.7) rotateY(260deg)}100%{transform:perspective(600px) translateY(0) scale(1) rotateY(720deg)}}
+@keyframes fin-squash{0%{transform:scale(1.2,.8)}40%{transform:scale(.93,1.08)}70%{transform:scale(1.03,.98)}100%{transform:scale(1)}}
+#fin-medal .burst{position:absolute;left:50%;top:65%;width:70%;aspect-ratio:1;margin:-35% 0 0 -35%;border:3px solid #ffd36b;border-radius:50%;opacity:0;pointer-events:none}
+#fin-medal.landed .burst{animation:fin-burst .7s ease-out}
+@keyframes fin-burst{0%{opacity:.9;transform:scale(.5)}100%{opacity:0;transform:scale(2.6)}}
+#fin-medal .cap{font-family:var(--display);font-size:clamp(.8rem,2.2vh,1.05rem);color:#ffd98a;white-space:nowrap;opacity:0;transition:opacity .4s}
+#fin-medal.landed .cap{opacity:1}
+#fin-medal.pin{left:calc(26px + min(11vh,84px) / 2);top:calc(var(--bar) + 22px + min(11vh,84px) * .62);width:min(11vh,84px);transition:top .9s cubic-bezier(.2,.8,.2,1),left .9s cubic-bezier(.2,.8,.2,1),width .9s cubic-bezier(.2,.8,.2,1)}
+#fin-medal.pin .cap{display:none}
+#finale.done #fin-medal.pin{left:50%;top:27%;width:min(20vh,150px)}
+#finale.done #fin-medal.pin .cap{display:block}
+#fin-line{position:absolute;left:50%;bottom:calc(var(--bar) + 2.4vh);translate:-50% 0;width:min(92vw,720px);margin:0;text-align:center;font-family:var(--display);font-size:clamp(1.2rem,3.2vw,1.9rem);line-height:1.25;text-shadow:0 2px 14px #000,0 0 3px #000;transition:opacity .5s}
+#fin-line.out{opacity:0}
+#fin-credits{position:absolute;left:0;right:0;top:var(--bar);bottom:var(--bar);overflow:hidden;-webkit-mask-image:linear-gradient(transparent,#000 14%,#000 86%,transparent);mask-image:linear-gradient(transparent,#000 14%,#000 86%,transparent)}
+#fin-credits[hidden]{display:none}
+#fin-roll{width:min(88vw,560px);margin:0 auto;text-align:center;will-change:transform}
+#fin-roll .cr{padding:0 0 6vh}
+#fin-roll p{margin:0}
+#fin-roll .cr-h{font-size:var(--s-1);color:var(--smoke);margin-bottom:8px}
+#fin-roll .cr-n{font-family:var(--display);font-size:clamp(1.15rem,3vw,1.6rem);line-height:1.4}
+#fin-roll .title .cr-n{font-size:clamp(2rem,6.4vw,3.4rem);line-height:1.1}
+#fin-end{position:absolute;left:50%;top:44%;translate:-50% 0;width:min(92vw,640px);text-align:center;display:grid;gap:14px;justify-items:center;animation:fin-rise .7s cubic-bezier(.2,.8,.2,1) both}
+#fin-end[hidden]{display:none}
+#fin-end h2{font-size:clamp(1.9rem,6vw,3.2rem);margin:0}
+#fin-end p{margin:0;font-size:var(--s1);color:var(--chalk)}
+#fin-end .row{justify-content:center;margin-top:8px}
+@keyframes fin-rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+#fin-skip{position:absolute;right:16px;bottom:calc(var(--bar) / 2);translate:0 50%;padding:6px 14px;font-size:var(--s-1)}
+#fin-skip[hidden]{display:none}
+/* less motion: the same ending as one quiet page */
+#finale.still{overflow:auto;display:grid;justify-items:center;align-content:start;gap:18px;padding:calc(var(--bar) + 20px) 16px calc(var(--bar) + 20px);background:rgba(0,0,0,.72);animation:none}
+#finale.still #fin-hy,#finale.still #fin-star{display:none}
+#finale.still #fin-medal,#finale.still #fin-line,#finale.still #fin-credits,#finale.still #fin-end{position:static;translate:none;animation:none}
+#finale.still #fin-medal .m{transform:none;animation:none}
+#finale.still #fin-credits{overflow:visible;-webkit-mask-image:none;mask-image:none;order:5}
+#finale.still #fin-roll .cr{padding-bottom:22px}
+#finale.still .fin-bar{position:fixed;pointer-events:none}
+@media (max-width:760px){
+  #fin-medal.pin{left:calc(14px + 30px);top:calc(var(--bar) + 12px + 38px);width:60px}
+}
+/* v3 css end */
 </style>
 </head>
 <body>
@@ -814,17 +914,6 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
       <li>A radio signal takes 3 to 22 minutes to cross from Mars to Earth. It depends on where the two planets are.</li>
       <li>Ingenuity flew by itself. Nobody can steer with a joystick when the signal takes minutes to arrive.</li>
     </ul></details>
-    <h3 class="subhead">Everything we left on Mars</h3>
-    <div class="game" id="g-mars"></div>
-    <p class="no3d-note">This browser could not start 3D graphics, so the globe is hidden. Every file is still in the list below.</p>
-    <div class="world-grid">
-      <div class="picker">
-        <div class="filters" data-world="mars" role="group" aria-label="Filter Mars files"></div>
-        <details class="allfiles"><summary>List all Mars files</summary><ol class="caselist" data-world="mars"></ol></details>
-      </div>
-      <div class="stage grab" id="st-mars" aria-label="3D globe of Mars with a light at each hardware site"><div class="mission" id="mis-mars" aria-live="polite"></div><div class="tip"></div><div class="pinlabel"></div><span class="hint">Drag to turn</span></div>
-      <article class="file" id="file-mars" aria-live="polite"></article>
-    </div>
     <a class="next" href="#models">Next stop: hold one in your hands</a>
   </div>
 </section>
@@ -845,18 +934,6 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
       </div>
       <div class="stage grab" id="st-model" aria-label="3D model viewer"><div class="loading" id="model-loading">Fetching the evidence…</div><span class="hint">Drag to spin</span></div>
     </div>
-    <a class="next" href="#overtime">Next: a clue about these machines</a>
-  </div>
-</section>
-
-<section id="overtime" data-say="overtime">
-  <div class="inner">
-    <div class="head">
-      <p class="fileno">Clue</p>
-      <h2>They would not quit</h2>
-      <p class="lede">Each one was built for a short job.</p>
-    </div>
-    <div class="over" id="over"></div>
     <a class="next" href="#ask">Next stop: play with Hy</a>
   </div>
 </section>
@@ -867,7 +944,7 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
       <video class="aistar" id="aistar" muted loop playsinline aria-hidden="true"></video>
       <p class="fileno">Stop 5 of 6</p>
       <h2>Play with Hy</h2>
-      <p class="lede">He talks. He listens. He takes you places.</p>
+      <p class="lede">He talks. He answers. He takes you places.</p>
     </div>
     <div class="missions">
       <div class="mcard">
@@ -883,15 +960,11 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
       <div class="mcard">
         <h3>Ride along</h3>
         <p>Sit back. Hy flies and tells the story.</p>
-        <div class="row"><button class="btn" data-tour="moon">Moon tour</button><button class="btn" data-tour="mars">Mars tour</button></div>
+        <div class="row"><button class="btn" data-tour="moon">Moon tour</button></div>
       </div>
       <div class="mcard">
         <h3>Talk to Hy</h3>
-        <form class="askbox" id="ask-form">
-          <label class="sr" for="ask-q">Your question</label>
-          <input type="text" id="ask-q" placeholder="Why did Opportunity stop working?" autocomplete="off" maxlength="300">
-          <button class="btn" type="submit">Ask</button>
-        </form>
+        <p>Tap a question.</p>
         <div class="qs" id="ask-qs"></div>
         <p class="quiet" id="ask-mode"></p>
       </div>
@@ -913,6 +986,8 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
       <h2>Real or fake?</h2>
     </div>
     <div class="quiz" id="quiz-box"></div>
+    <p class="quiet" id="fin-left"></p>
+    <div class="row"><button class="btn big" id="fin-open" hidden>Watch the ending</button></div>
   </div>
 </section>
 
@@ -1022,8 +1097,42 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
   <button class="btn ghost" id="rove-exit">Leave</button>
 </div>
 <!-- rove end -->
+<!-- finale begin -->
+<div id="finale" hidden aria-label="The ending">
+  <div id="fin-stage"></div>
+  <div id="fin-star" aria-hidden="true"></div>
+  <div id="fin-hy" aria-hidden="true"><div class="bob"></div></div>
+  <div id="fin-medal" hidden>
+    <div class="m">
+      <svg viewBox="0 0 120 150" aria-hidden="true">
+        <defs>
+          <radialGradient id="fm-gold" cx="38%" cy="32%" r="78%"><stop offset="0" stop-color="#fff6cf"/><stop offset=".45" stop-color="#f5c26b"/><stop offset="1" stop-color="#b9781a"/></radialGradient>
+          <linearGradient id="fm-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#8f5a0e"/></linearGradient>
+        </defs>
+        <path d="M34 0h22l14 52H48z" fill="#ff9a3d"/><path d="M86 0H64L50 52h22z" fill="#58d7e6"/><path d="M56 0h8l-4 15z" fill="#17171a" opacity=".25"/>
+        <circle cx="60" cy="98" r="48" fill="url(#fm-rim)"/><circle cx="60" cy="98" r="42" fill="url(#fm-gold)"/>
+        <circle cx="60" cy="98" r="36" fill="none" stroke="#9a6412" stroke-width="1.5" stroke-dasharray="2 4"/>
+        <path d="M60.0 74.0L66.2 90.5L83.8 91.3L70.0 102.2L74.7 119.2L60.0 109.5L45.3 119.2L50.0 102.2L36.2 91.3L53.8 90.5z" fill="#8a590d" stroke="#7d4f0b" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M60 80l3.200 9.500h-6.400z" fill="#f8dc94" opacity=".55"/>
+      </svg>
+      <i class="burst"></i>
+    </div>
+    <span class="cap">Space Detective</span>
+  </div>
+  <p id="fin-line" aria-live="polite"></p>
+  <div id="fin-credits" hidden><div id="fin-roll"></div></div>
+  <div id="fin-end" hidden>
+    <h2>The Left Behind Files</h2>
+    <p>Thank you for playing, Space Detective.</p>
+    <div class="row"><button class="btn big" id="fin-back">Back to the site</button><button class="btn ghost" id="fin-again">Watch again</button></div>
+  </div>
+  <i class="fin-bar top" aria-hidden="true"></i><i class="fin-bar bot" aria-hidden="true"></i>
+  <div id="fin-flash" aria-hidden="true"></div>
+  <button class="btn ghost" id="fin-skip">Skip</button>
+</div>
+<!-- finale end -->
 <div id="guide">
-  <button id="guide-btn" aria-label="Hy, your guide. Open the question box."><img src="assets/buddy.jpg" alt=""></button>
+  <button id="guide-btn" aria-label="Hy, your guide. Open the chat."><img src="assets/buddy.jpg" alt=""></button>
   <div id="bubble" role="status">
     <p id="say"></p>
     <div class="row"><button id="bubble-ask">Talk to me</button><button id="bubble-voice">Turn on my voice</button><button class="x" id="bubble-x" aria-label="Send the guide away">Hide</button></div>
@@ -1033,11 +1142,10 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
 
 <div id="trailer" role="dialog" aria-label="Trailer"><div class="box"><button class="btn ghost" id="trailer-x">Close</button><video id="trailer-v" controls playsinline poster="assets/intro.jpg"></video></div></div>
 
-<aside id="chat" aria-label="Ask Detective Hy">
-  <header><h2 id="chat-title">Talk to Hy</h2><span class="mode" id="mode">Checking…</span><button class="back" id="chat-back">Back to Hy</button><button id="chat-x" aria-label="Close the question box">Close</button></header>
+<aside id="chat" aria-label="Talk to Hy">
+  <header><h2 id="chat-title">Talk to Hy</h2><span class="mode" id="mode">Checking…</span><button class="back" id="chat-back">Back to Hy</button><button id="chat-x" aria-label="Close the chat">Close</button></header>
   <div id="log" aria-live="polite"></div>
   <div class="qs" id="chat-qs"></div>
-  <form id="chat-form"><label class="sr" for="chat-q">Your question</label><input type="text" id="chat-q" placeholder="Ask about any machine" autocomplete="off" maxlength="300"><button class="btn onpaper ghost" type="button" id="mic" aria-label="Talk to Hy with your microphone">Talk</button><button class="btn onpaper" type="submit">Send</button></form>
 </aside>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

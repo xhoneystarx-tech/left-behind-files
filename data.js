@@ -366,7 +366,7 @@ LBF.coordText = function (c) {
 LBF.buildPrompt = function () {
   const WORLD = { moon: 'the Moon', mars: 'Mars' };
   const kb = LBF.CASES.map(c => `[${c.id}] ${c.name} | ${WORLD[c.world]} | ${LBF.KINDS[c.kind]} | ${c.date} | ${c.site} (${LBF.coordText(c)}) | status: ${LBF.STATUS[c.status].label} | ${c.story} ${c.science} ${c.clue} Still there: ${c.left}`).join('\n');
-  return `You are Hy (full name Hy Drogen), a friendly, glowing orange hydrogen atom who works as a detective. You are the talking guide on "The Left Behind Files", a website for school-age kids (about 8 to 14) about the hardware NASA has left on the Moon and Mars. You are not a search box: you are a character who talks out loud, takes kids to places on the page's 3D globes, and plays games with them.
+  return `You are Hy (full name Hy Drogen), a friendly, glowing orange hydrogen atom who works as a detective. You are the talking guide on "The Left Behind Files", a website for school-age kids (about 8 to 14) about the hardware NASA has left on the Moon and Mars. You are not a search box: you are a character who talks out loud, takes kids to places on the page, and plays games with them. The kid cannot type: they tap question buttons, and you write the next buttons yourself (see the next line below).
 
 VOICE
 Warm, lightly noir detective. Call the reader "kid" or "partner" now and then. Your words are read aloud, so write 2 to 4 short, clear sentences unless asked for more, and explain any hard word in a few words. Plain text only: no markdown, no lists, no emoji.
@@ -381,11 +381,11 @@ RULES
 
 CONTROL LINES
 After your sentences you may add control lines, each on its own line, written exactly like this:
-[[go:ID]] turns the 3D globe to that machine and opens its file. Use it whenever your answer is mainly about one machine in the files. ID is the id in square brackets in the files.
+[[go:ID]] turns the 3D Moon globe to that machine and opens its file. Use it whenever your answer is mainly about one machine on the Moon. ID is the id in square brackets in the files. Mars has no globe on this site: for a Mars machine use a model line or do:rovers instead.
 [[model:KEY]] shows a 3D model the kid can spin. KEY is one of: lm (Apollo lander), viking, mer (Spirit and Opportunity), insight, percy (Perseverance), curio (Curiosity), ingenuity.
-[[do:NAME]] offers an activity. NAME is one of: laser (the quest about bouncing a laser off the Moon's mirror), rovers (the quest where the kid drives Perseverance and Curiosity, drills, and flies Ingenuity), mystery (guess the mystery machine), tour-moon, tour-mars (narrated tours), quiz.
-[[next:FIRST QUESTION|SECOND QUESTION]] suggests two short questions the kid could ask next. Always include this line.
-Use at most one go line, one model line and one do line. Never mention these lines or their brackets in your sentences. When you use a go line you can say things like "Follow me" or "Watch the globe".
+[[do:NAME]] offers an activity. NAME is one of: laser (the quest about bouncing a laser off the Moon's mirror), rovers (the quest where the kid drives Perseverance and Curiosity, drills, and flies Ingenuity), mystery (guess the mystery machine on the Moon), tour-moon (a narrated tour of the Moon), quiz (the real-or-fake game).
+[[next:FIRST QUESTION|SECOND QUESTION]] gives the two question buttons the kid sees next. Keep each under 8 words, make them different from each other, and only ask things you can answer from the files. Always include this line.
+Use at most one go line, one model line and one do line. Never mention these lines or their brackets in your sentences. When you use a go line you can say things like "Follow me" or "Watch the Moon turn".
 
 MODES
 The page may add a line that starts with ACTIVE MODE.
@@ -525,3 +525,60 @@ LBF.SOURCES.push({ group: "Quest 3: driving, drilling and flying on Mars", items
   ["NASA 3D Resources: models of Curiosity, Perseverance, Ingenuity, Mars Reconnaissance Orbiter and the 70-meter Deep Space Network antenna", "https://github.com/nasa/NASA-3D-Resources"]
 ] });
 /* ROVE data end */
+
+/* HELP data begin */
+/* What Hy says when a child has made no progress on one part of a puzzle for ten seconds. Short, and it starts with what to do. */
+LBF.HELP = {
+  "q1:walk": "Look at the arrows on your list. Each one points to a machine. Walk that way until you stand in a tall beam of light.",
+  "q1:quiz": "Think back to what you found. Tap the answer you remember. A wrong tap is fine: just try another.",
+  "q2:aim": "Tap the Moon. That points the telescope at it.",
+  "q2:zoom": "Find the small glowing ring on the Moon. Tap it to fire the laser.",
+  "q2:m1": "Drag the mirror. Tilt it until the beam of light points at Earth, then hold it still.",
+  "q2:m2": "Drag the new mirror. Open or close it until the two mirrors make a square corner.",
+  "q2:m3": "Drag the last mirror up, like closing the corner of a box.",
+  "q2:m3w": "Drag anywhere to spin the corner. Then press Next.",
+  "q2:far": "Drag the Moon closer or farther away. Stop when the clock says 2.56 seconds.",
+  "q2:quiz": "Think back to the laser and the mirrors. Tap the answer you remember. A wrong tap is fine.",
+  "q3:p_drive": "Drive to the tall blue light. Press the up arrow to go. Press left and right to steer.",
+  "q3:p_drill": "Press and hold the big button to push the drill. If the needle leaves the green, let go for a moment, then hold again.",
+  "q3:p_tube": "Press the button that says Plan the trip home.",
+  "q3:p_plan": "Watch the small ring move around Mars. Press Launch when it reaches the big ring that says Meet here.",
+  "q3:c_drive": "Drive to the tall blue light. Steer around the dark, pointed rocks. They hurt the wheels.",
+  "q3:c_drill": "Tap the button each time the needle is in the green. Tap, tap, tap, like a drum.",
+  "q3:c_send": "Wait for the orbiter to fly into the blue cone. Then press Send.",
+  "q3:i_spin": "Press and hold the big button. Keep holding until the blades reach the green.",
+  "q3:i_fly": "Fly to a label on the ground: your shadow, the parachute or the rover. When the camera box turns blue, press Snap.",
+  "q3:i_land": "Follow the arrow back to the blue ring next to the rover. Fly into the ring to land.",
+  "q3:i_chain": "Your radio is small. Tap who is closest first: the rover. Then the orbiter. Then Earth.",
+  "q3:quiz": "Think back to the three robots. Tap the answer you remember. A wrong tap is fine.",
+  "shadow": "Drag the dark shape to spin it. Look for wheels, legs or blades. Then tap its name.",
+  "mystery": "Read the clue above the Moon. Spin the Moon and tap a light. Want more help? Press Next clue.",
+  "quiz": "Read the card. Does it sound true? Tap Real or Fake. A wrong guess is fine.",
+  "watch": "Watch this part, or press the button on the card. I will tell you when it is your turn.",
+  "next:0": "Start with Quest 1. Walk on the Moon and find four machines.",
+  "next:1": "Next is Quest 2. Fire a laser at the Moon, and build the mirror that sends it back.",
+  "next:2": "Next is Quest 3. Drive two Mars rovers and fly a helicopter.",
+  "next:3": "Next is Quest 4. Name five machines by their shadows.",
+  "next:4": "Next is Quest 5. Pick a game to play with me: a mystery, an interview or a tour.",
+  "next:5": "One quest left. Real or fake? Tap your answer on each card.",
+  "next:done": "You finished all six quests, detective. Want to see the ending again?"
+};
+/* The ending: three lines for Hy, then the credits. */
+LBF.FINALE = {
+  lines: ["You did it, detective!", "All six quests. This medal is yours.", "Good luck out there. Keep looking up!"],
+  bye: "They are still up there. Keep looking up.",
+  credits: [
+    ["", ["The Left Behind Files"]],
+    ["Space Detective", ["You"]],
+    ["Your guide", ["Hy, a hydrogen atom"]],
+    ["Made by", ["Team Quantumers", "Kien Do, Vietnam"]],
+    ["Made for", ["NASA Space Apps Challenge"]],
+    ["Facts, maps and 3D models", ["NASA", "NASA Science and JPL", "NASA 3D Resources"]],
+    ["Still up there", ["Apollo 15 laser mirror", "Apollo 17 Moon car", "Surveyor 3", "LCROSS", "Perseverance", "Curiosity", "Ingenuity"]],
+    ["Music", ["Luke Bergs: Aurora", "Nebulite: Feel Alive", "Nebulite: Memories", "Spiring: Late Night", "tubebackr: Falling", "from freetouse.com"]],
+    ["Hy's voice", ["Made with ElevenLabs"]],
+    ["Built with the help of", ["Claude"]],
+    ["", ["A student project.", "Not an official NASA website."]]
+  ]
+};
+/* HELP data end */

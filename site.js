@@ -84,6 +84,9 @@ const skipBtn = (label, fn, cls) => {
 };
 const dotsRow = n => { const d = el('div', { class: 'dots' }); for (let i = 0; i < n; i++) d.append(el('span')); return d; };
 const answer = good => { if (good) Sfx.yes(); else Sfx.no(); G.react(good ? 'yes' : 'no'); };
+/* puzzles that live on the page tell Hy which part the child is on: each entry returns [help key, progress] while a round is on */
+const PARTS = [];
+const inView = e => { if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.bottom > 90 && r.top < innerHeight - 90; };
 const C = LBF.CASES, byId = {};
 C.forEach(c => byId[c.id] = c);
 ['moon', 'mars'].forEach(w => C.filter(c => c.world === w)
@@ -150,9 +153,8 @@ const SAY = {
   story: "Keep scrolling. I'll explain as we go.",
   moon: "Spin the Moon. Tap any light.",
   mirrors: "Press the big button. Count with me.",
-  mars: "Mars! Teal lights are still driving.",
+  mars: "Mars! Be three robots.",
   models: "Whose shadow is this?",
-  overtime: "Planned for 90 days. Lasted 14 years.",
   ask: "My favorite stop. Pick a game, or talk to me.",
   quiz: "Last stop. Real or fake? You decide.",
   sources: "This part is for grown-ups."
@@ -300,7 +302,7 @@ function buildPicker(world) {
     el('span', { class: 'dot s-' + c.status }), el('span', { class: 'nm', text: c.name }), el('span', { class: 'yr', text: c.year + ' · ' + LBF.KINDS[c.kind] })))));
 }
 function renderFile(c) {
-  const box = $('#file-' + c.world);
+  const box = $('#file-' + c.world); if (!box) return;
   box.dataset.file = 'File ' + c.file;
   box.replaceChildren(
     el('h3', { text: c.name }),
@@ -329,7 +331,7 @@ const QUIPS = {
   lost: "A cold case. Even the ones that got away taught the engineers something."
 };
 function openCase(id, opts = {}) {
-  const c = byId[id]; if (!c) return;
+  const c = byId[id]; if (!c || c.world !== 'moon') return;
   if (opts.user && Missions.intercept(c)) return;
   Notebook.file(id);
   selected[c.world] = id;
@@ -339,45 +341,7 @@ function openCase(id, opts = {}) {
   if (opts.reveal) $('#' + c.world).scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' });
   if (!opts.quiet) { say(c.name + '. ' + QUIPS[c.status], true, { silent: true }); Voice.speak(QUIPS[c.status]); }
 }
-['moon', 'mars'].forEach(w => { buildPicker(w); renderFile(byId[selected[w]]); });
-
-/* ───────────────────────── Overtime: stop the bar where you think the machine quit ───────────────────────── */
-(function () {
-  const box = $('#over'), SCALE = 64, items = LBF.OVER, dots = dotsRow(items.length);
-  const ask = el('p', { class: 'ask', text: 'When did each one quit? Stop the bar.' }), go = el('button', { class: 'btn big', text: 'Start' });
-  const rows = el('div', { class: 'over-rows' });
-  box.append(el('div', { class: 'game' }, ask, el('div', { class: 'row' }, go, dots)), rows);
-  let i = -1, raf = 0, t0 = 0, cur = null, close = 0;
-  function next() {
-    i++; if (i >= items.length) { ask.textContent = close + ' of ' + items.length + ' close guesses. They all beat the plan.'; go.textContent = 'Play again'; go.hidden = false; i = -1; Notebook.badge('stay'); Sfx.win(); say('They just would not quit.', true); return; }
-    if (i === 0) { rows.replaceChildren(); close = 0; $$('span', dots).forEach(d => d.className = ''); }
-    const o = items[i], fill = el('div', { class: 'fill', style: 'width:0%' }), x = el('div', { class: 'x', text: '' }), mark = el('div', { class: 'guess', hidden: '' });
-    const plan = el('div', { class: 'plan', style: 'left:' + (100 / SCALE) + '%' });
-    const d = el('div', { class: 'd', text: 'Plan: ' + o.plan });
-    rows.append(el('div', { class: 'r' }, el('div', { class: 'n', text: o.name }), el('div', { class: 'track' }, fill, plan, mark, x), d));
-    cur = { o, fill, x, mark, d, v: 0, guess: null };
-    ask.textContent = o.name + ': planned ' + o.plan + '. When did it quit?'; go.textContent = 'Stop!'; go.hidden = false;
-    t0 = performance.now(); cancelAnimationFrame(raf); raf = requestAnimationFrame(run);
-  }
-  function show(c) { c.fill.style.width = (c.v / SCALE * 100) + '%'; c.x.style.left = (c.v / SCALE * 100) + '%'; c.x.textContent = (c.v < 10 ? c.v.toFixed(1) : Math.round(c.v)) + '× the plan'; }
-  function run(now) {
-    const c = cur; if (!c) return;
-    if (c.guess === null) { c.v = Math.min(SCALE - 2, (now - t0) / 1000 * 9); show(c); if (c.v >= SCALE - 2) stopAt(); }
-    else {                                                          /* after the guess, the bar races on to the real answer */
-      c.v += (c.o.x - c.v) * 0.09; if (Math.abs(c.o.x - c.v) < 0.15) c.v = c.o.x; show(c);
-      if (c.v === c.o.x) { c.d.textContent = 'Plan: ' + c.o.plan + '. Really: ' + c.o.did + '.'; cur = null; setTimeout(next, 1700); return; }
-    }
-    raf = requestAnimationFrame(run);
-  }
-  function stopAt() {
-    const c = cur; if (!c || c.guess !== null) return; c.guess = c.v; go.hidden = true;
-    c.mark.hidden = false; c.mark.style.left = (c.guess / SCALE * 100) + '%';
-    const good = Math.abs(c.guess - c.o.x) <= Math.max(3, c.o.x * 0.25); if (good) close++;
-    dots.children[i].className = good ? 'ok' : 'miss'; answer(good);
-    ask.textContent = c.guess < c.o.x ? 'It kept going!' : 'Not quite that long.';
-  }
-  go.addEventListener('click', () => { if (cur && cur.guess === null) stopAt(); else if (!cur) next(); });
-})();
+buildPicker('moon'); renderFile(byId[selected.moon]);     /* only the Moon has a map of files; Mars is a quest */
 
 /* ───────────────────────── Last stop: real or fake? ───────────────────────── */
 (function () {
@@ -401,8 +365,9 @@ function openCase(id, opts = {}) {
     i++; setTimeout(show, 2600);
   }
   function start() { order = shuffle(list); i = 0; right = 0; $$('span', dots).forEach(d => d.className = ''); bReal.hidden = bFake.hidden = false; again.hidden = true; show(); }
-  bReal.addEventListener('click', () => pick(true)); bFake.addEventListener('click', () => pick(false)); again.addEventListener('click', start);
+  bReal.addEventListener('click', () => pick(true)); bFake.addEventListener('click', () => pick(false)); again.addEventListener('click', () => { Help.fresh('quiz'); start(); });
   start();
+  PARTS.push(() => i < order.length && !bReal.disabled && inView(box) ? ['quiz', i] : null);
 })();
 
 /* ───────────────────────── Sources ───────────────────────── */
@@ -416,40 +381,17 @@ LBF.SOURCES.forEach(g => {
 let three = false, showModel = function () {};
 try { three = init3D(); } catch (err) { console.warn('3D unavailable:', err); }
 
-/* Stop 3: find each robot on Mars. Hy names one, you click its light. Wrong lights tell you who they are. */
-(function () {
-  const box = $('#g-mars'); if (!box) return; if (!globes.mars) { box.hidden = true; return; }
-  const N = 5, dots = dotsRow(N), ask = el('p', { class: 'ask', text: 'Can you find 5 robots on Mars?' }), go = el('button', { class: 'btn big', text: 'Start' }), hint = el('p', { class: 'why' });
-  box.append(ask, el('div', { class: 'row' }, go, dots), hint);
-  let order = [], i = 0, misses = 0, first = 0;
-  const g = () => globes.mars;
-  function round() {
-    if (i >= N) { g().onPick = null; ask.textContent = first + ' of ' + N + ' on the first try!'; hint.textContent = ''; go.textContent = 'Play again'; go.hidden = false; Notebook.badge('pin'); Sfx.win(); say('You know Mars like a local.', true); return; }
-    misses = 0; ask.textContent = 'Click on: ' + order[i].name; hint.textContent = '';
-  }
-  go.addEventListener('click', () => {
-    if (!g()) return;
-    order = shuffle(C.filter(c => c.world === 'mars')).slice(0, N); i = 0; first = 0; go.hidden = true;
-    $$('span', dots).forEach(d => d.className = ''); C.forEach(c => c.world === 'mars' && g().mark(c.id, 0xffffff));
-    g().onPick = id => {
-      const t = order[i]; if (!t) return;
-      if (id === t.id) { answer(true); if (!misses) first++; dots.children[i].className = misses ? 'miss' : 'ok'; g().mark(id, 0x4be37a); g().focus(id); renderFile(t); i++; hint.textContent = 'Found it!'; setTimeout(round, 1300); }
-      else { answer(false); misses++; g().mark(id, 0xff5a4d); hint.textContent = 'That one is ' + byId[id].name + '. Try another.'; if (misses >= 2) g().focus(t.id); }
-    };
-    say('I name a robot. You click its light.', true); round();
-  });
-})();
-
 /* Stop 4: whose shadow is this? The model is blacked out until you name it. */
 (function () {
   const box = $('#g-models'); if (!box) return; if (!LBF.shadow) { box.hidden = true; return; }
   const keys = Object.keys(LBF.MODELS), N = Math.min(5, keys.length), dots = dotsRow(N);
   const ask = el('p', { class: 'ask', text: 'Can you name a machine by its shadow?' }), go = el('button', { class: 'btn big', text: 'Start' }), choices = el('div', { class: 'choices' });
   box.append(ask, el('div', { class: 'row' }, go, dots), choices);
-  let order = [], i = 0, right = 0;
+  let order = [], i = 0, right = 0, playing = false;
+  PARTS.push(() => playing && inView(box) ? ['shadow', i] : null);
   function round() {
     const hangar = $('#models .hangar');
-    if (i >= N) { LBF.shadow(false); hangar.classList.remove('playing'); choices.replaceChildren(); ask.textContent = right + ' of ' + N + '. Now spin them yourself.'; go.textContent = 'Play again'; go.hidden = false; Notebook.badge('shadow'); Sfx.win(); say('Good eye, detective.', true); return; }
+    if (i >= N) { playing = false; LBF.shadow(false); hangar.classList.remove('playing'); choices.replaceChildren(); ask.textContent = right + ' of ' + N + '. Now spin them yourself.'; go.textContent = 'Play again'; go.hidden = false; Notebook.badge('shadow'); Sfx.win(); say('Good eye, detective.', true); return; }
     const key = order[i]; let missed = false; hangar.classList.add('playing'); LBF.shadow(true); showModel(key); ask.textContent = 'Whose shadow is this? Spin it.';
     choices.replaceChildren(...shuffle([key].concat(shuffle(keys.filter(k => k !== key)).slice(0, 2))).map(k => el('button', { class: 'btn ghost', text: LBF.MODELS[k].name, onclick: e => {
       if (k !== key) { answer(false); missed = true; e.currentTarget.disabled = true; return; }
@@ -457,7 +399,7 @@ try { three = init3D(); } catch (err) { console.warn('3D unavailable:', err); }
       $$('button', choices).forEach(b => b.disabled = true); i++; setTimeout(round, 2200);
     } })));
   }
-  go.addEventListener('click', () => { order = shuffle(keys).slice(0, N); i = 0; right = 0; go.hidden = true; $$('span', dots).forEach(d => d.className = ''); say('Whose shadow is this?', true); round(); });
+  go.addEventListener('click', () => { Help.fresh('shadow'); playing = true; order = shuffle(keys).slice(0, N); i = 0; right = 0; go.hidden = true; $$('span', dots).forEach(d => d.className = ''); say('Whose shadow is this?', true); round(); });
 })();
 if (!three) document.body.classList.add('no3d');
 
@@ -484,7 +426,7 @@ function init3D() {
   const globeMat = (map, tint) => new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0, color: tint || 0xffffff });
 
   /* sky */
-  const sky = new THREE.Scene(), skyCam = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+  const sky = new THREE.Scene(), skyCam = new THREE.PerspectiveCamera(60, 1, 0.1, 100), skyAdd = { x: 0, y: 0 };     /* skyAdd: the ending turns the stars with its camera */
   const skyMesh = new THREE.Mesh(new THREE.SphereGeometry(50, 48, 32), new THREE.MeshBasicMaterial({ map: tex('stars.jpg'), side: THREE.BackSide, color: 0xbbbbbb }));
   sky.add(skyMesh);
 
@@ -591,8 +533,7 @@ function init3D() {
     return api;
   }
   globes.moon = makeGlobe('moon', moonTex);
-  globes.mars = makeGlobe('mars', marsTex, 0xffe9dc);
-  globes.moon.focus(selected.moon); globes.mars.focus(selected.mars);
+  globes.moon.focus(selected.moon);
 
   /* laser view */
   (function () {
@@ -1073,11 +1014,11 @@ function init3D() {
     const pos = new THREE.Vector3(), headDir = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), right = new THREE.Vector3(), basis = new THREE.Matrix4();
     let active = false, zoom = 0, clock = 0, got = {}, paused = false, rows = {};
     let speed = 0, turnV = 0, phase = 0, antic = 0, moving = false, cheer = -1, lastStep = 0, idle = 0;
-    let jumpT = -1, jumpY = 0, jumpV = 0, landT = 9, camYaw = 0, camPitch = 0.3, look = null, lookIdle = 9, learned = [];
+    let jumpT = -1, jumpY = 0, jumpV = 0, landT = 9, camYaw = 0, camPitch = 0.3, look = null, lookIdle = 9, learned = [], qAt = -1;
     function reset() {
       pos.copy(START); headDir.set(0, 0, -1); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize();
       earth.position.copy(pos).multiplyScalar(R + 2).addScaledVector(headDir, 100); placeDipper(headDir, pos);      /* Earth hangs low over the horizon ahead */
-      zoom = 0; got = {}; learned = []; paused = false; speed = 0; phase = 0; cheer = -1; jumpT = -1; jumpY = 0; camYaw = 0; camPitch = 0.3; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.35; if (s.flag) { s.up.remove(s.flag); s.flag = null; } if (s.fx) { (s.fx.parent || scene).remove(s.fx); s.fx = null; } (s.dust || []).forEach(d => s.up.remove(d)); s.dust = null; s.model.position.set(0, 0, 0); s.model.rotation.y = 0; });
+      zoom = 0; got = {}; learned = []; paused = false; qAt = -1; speed = 0; phase = 0; cheer = -1; jumpT = -1; jumpY = 0; camYaw = 0; camPitch = 0.3; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.35; if (s.flag) { s.up.remove(s.flag); s.flag = null; } if (s.fx) { (s.fx.parent || scene).remove(s.fx); s.fx = null; } (s.dust || []).forEach(d => s.up.remove(d)); s.dust = null; s.model.position.set(0, 0, 0); s.model.rotation.y = 0; });
       rocks.forEach(r => { r.got = false; r.g.visible = true; r.core.scale.setScalar(r.size); r.core.position.z = r.size * 0.5; r.glow.material.opacity = 0.5; r.glow.scale.setScalar(1); }); rocksGot = 0; rockCount.textContent = 'Moon rocks: 0 / ' + rocks.length;
       const list = $('#walk-list'); list.replaceChildren(); rows = {};
       NEED.forEach(([k, label, st]) => { const ic = el('span', { class: 'icon' }); ic.innerHTML = ICONS[k]; const li = el('li', { class: 's-' + st }, ic, el('span', { text: label }), el('span', { class: 'arrow', text: '➤' })); rows[k] = li; list.append(li); });
@@ -1105,7 +1046,7 @@ function init3D() {
     }
     /* before leaving, Hy checks what you remember about the three machines you found */
     function debrief(i, misses) {
-      const f = $('#walk-found'); paused = true; f.hidden = false;
+      const f = $('#walk-found'); paused = true; f.hidden = false; qAt = i >= learned.length ? -1 : i;
       if (i >= learned.length) {
         cheer = 0;
         f.replaceChildren(el('h3', { text: 'Quest complete!' }), el('p', { class: 'fact', text: 'You remembered all ' + learned.length + '.' }),
@@ -1129,7 +1070,7 @@ function init3D() {
     }
     function start() {
       reset(); active = true; box.hidden = false; document.body.classList.add('questing'); Missions.stopAll && Missions.stopAll();
-      say('Find all four. Remember them. I will ask.', true);
+      say('Find all four. Remember them. I will ask.', true); Help.fresh('q1:');
       soundOn = Music.isOn(); soundBtn.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); Music.scene('m-aurora');
     }
     function stop() { Music.scene(null); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
@@ -1218,6 +1159,8 @@ function init3D() {
 
     views.push({ el: stage, scene, cam, quest: true, update(dt) {
       if (!active) return;
+      { let near = 9; sites.forEach(s => { if (!s.found) near = Math.min(near, Math.acos(Math.min(1, pos.dot(s.dir)))); });       /* Hy watches: closer to a machine, or one more found, counts as progress */
+        Help.part(paused ? (qAt >= 0 ? 'q1:quiz' : null) : zoom >= 1 ? 'q1:walk' : null, dt, paused ? qAt : Object.keys(got).length * 1000 - Math.round(near / 0.03)); }
       clock += dt; zoom = Math.min(1, zoom + dt / 2.6);
       const can = !paused && zoom >= 1 && cheer < 0;
       /* walk where the screen is facing: forward goes away from the camera, left and right go across the screen,
@@ -1549,7 +1492,7 @@ function init3D() {
       foundEl.hidden = false;
     }
     function quiz(i, misses) {                       /* before the quest ends, Hy checks what stuck */
-      S.paused = true; foundEl.hidden = false;
+      S.paused = true; foundEl.hidden = false; S.quizAt = i >= B.quiz.length ? -1 : i;
       if (i >= B.quiz.length) {
         foundEl.replaceChildren(el('h3', { text: 'Quest complete!' }), el('p', { class: 'fact', text: 'You brought the light home.' }), el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: 'Go to Stop 3', onclick: finish })));
         Sfx.win(); say(misses ? 'Case closed. You earned your badge, partner.' : 'A perfect score. You could run this agency, kid.', true); return;
@@ -1844,9 +1787,11 @@ function init3D() {
       pipEl.hidden = !(T.n && !T.home && off > 12 * DEG); if (!pipEl.hidden) pipEl.style.transform = 'rotate(' + Math.atan2(sx, sy).toFixed(3) + 'rad)';       /* outside the scope: an arrow on the rim shows which way the light went */
       if (frameN % 12 === 0) envUpdate();
     }
+    const HELPED = { aim: 1, zoom: 1, m1: 1, m2: 1, m3: 1, m3w: 1, far: 1 };      /* the steps where the child has to do something, so Hy can step in */
     function tick(dt) {
       clock += dt; frameN++;
       if (!S.paused) { S.t += dt; const st = stages[S.name]; if (st && st.update) st.update(dt); }
+      Help.part(S.paused ? (S.quizAt >= 0 ? 'q2:quiz' : null) : HELPED[S.name] ? 'q2:' + S.name : null, dt, S.paused ? S.quizAt : null);
       for (let i = tweens.length - 1; i >= 0; i--) {
         const w = tweens[i]; if (w.delay > 0) { w.delay -= dt; if (w.delay > 0) continue; w.from = S[w.key]; }
         w.t += dt; S[w.key] = lerp(w.from, w.to, w.fn(w.t / w.dur)); if (w.t >= w.dur) { S[w.key] = w.to; tweens.splice(i, 1); }
@@ -1897,7 +1842,7 @@ function init3D() {
     }
     function start() {
       reset(); active = true; finished = false; box.hidden = false; document.body.classList.add('questing'); if (Missions.stopAll) Missions.stopAll();
-      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-feelalive'); go('aim');
+      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-feelalive'); Help.fresh('q2:'); go('aim');
     }
     function stop() { Music.scene(null); Sfx.set(true); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
     function leave(to) { stop(); setTimeout(() => { const t = $(to); if (t) t.scrollIntoView({ behavior: 'auto', block: 'start' }); }, 80); }
@@ -2220,7 +2165,7 @@ function init3D() {
       foundEl.hidden = false;
     }
     function quiz(i, misses) {                       /* before the quest ends, Hy checks what stuck */
-      S.paused = true; foundEl.hidden = false;
+      S.paused = true; foundEl.hidden = false; S.quizAt = i >= D.quiz.length ? -1 : i;
       if (i >= D.quiz.length) {
         foundEl.replaceChildren(el('h3', { text: 'Quest complete!' }), el('p', { class: 'fact', text: 'You were three robots on Mars.' }), el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: 'Go to Stop 4', onclick: finish })));
         Sfx.win(); say(misses ? 'Case closed. You earned your badge, partner.' : 'A perfect score. You could run this agency, kid.', true); return;
@@ -2794,10 +2739,26 @@ function init3D() {
       panel('Your pictures reached Earth', [shots, el('p', { text: 'From the helicopter to the rover, to the orbiter, to this dish.' })], 'Next', () => { stepDone('i'); card(D.cards[2], () => quiz(0, 0)); });
     });
 
+    /* ---------- what Hy explains if the child stops getting anywhere: the part they are on, and a number that grows with progress ---------- */
+    const HELPED = { p_drive: 1, p_drill: 1, p_tube: 1, p_plan: 1, c_drive: 1, c_drill: 1, c_send: 1, i_spin: 1, i_fly: 1, i_land: 1, i_chain: 1 };
+    function helpNow() {
+      if (S.paused) return S.quizAt >= 0 ? ['q3:quiz', S.quizAt] : null;
+      const n = S.name; if (!HELPED[n] || (n === 'p_tube' && !S.landed)) return null;
+      let p = null;
+      if (n === 'p_drive' || n === 'c_drive') p = -Math.round(Math.hypot(rover.x - site.rock[0], rover.z - site.rock[1]) / 1.5);
+      else if (n === 'p_drill' || n === 'c_drill') p = Math.round(S.depth * 400);
+      else if (n === 'i_spin') p = Math.round(S.rpm * 10);
+      else if (n === 'i_fly') { let nd = 0; SHOTS.forEach(([k]) => { if (k === 'shadow' || S.photos.find(x => x.k === k)) return; targetAt(k, t4); const d = Math.hypot(t4.x - S.hx, t4.z - S.hz); if (!nd || d < nd) nd = d; }); p = S.photos.length * 1000 - Math.round(nd / 4); }
+      else if (n === 'i_land') p = S.down ? 1e6 : -Math.round(Math.hypot(S.hx - site.heli[0], S.hz - site.heli[1]) / 3);
+      else if (n === 'i_chain') p = S.link * 10 + (S.hop >= 0 ? 1 : 0);
+      return ['q3:' + n, p];
+    }
+
     /* ---------- one step of time ---------- */
     function tick(dt) {
       clock += dt;
       if (!S.paused) { S.t += dt; const st = stages[S.name]; if (st && st.update) st.update(dt); }
+      { const h = helpNow(); Help.part(h && h[0], dt, h ? h[1] : null); }
       for (let i = tweens.length - 1; i >= 0; i--) {
         const w = tweens[i]; if (w.delay > 0) { w.delay -= dt; if (w.delay > 0) continue; }
         if (w.from === null) w.from = Array.isArray(w.to) ? w.obj[w.key].slice() : w.obj[w.key];
@@ -2848,7 +2809,7 @@ function init3D() {
     const soundBtn = el('button', { class: 'btn ghost', id: 'rove-sound', text: 'Sound: on', onclick: () => { const v = !Music.isOn(); Music.set(v); Sfx.set(v); soundBtn.textContent = 'Sound: ' + (v ? 'on' : 'off'); } });
     box.append(soundBtn);
     function reset() {
-      Object.assign(S, { name: '', t: 0, paused: false, act: null, actMode: '', camFree: false, ddx: 0, ddy: 0, said: {}, spd: 0, orbY: 0, orbP: 0, ch: 0, flying: false, depth: 0, tipD: -0.03, snapped: false, bitTurn: 0, axZ: 0, axSet: false, kind: 'core', photos: [] });
+      Object.assign(S, { name: '', t: 0, paused: false, act: null, actMode: '', camFree: false, ddx: 0, ddy: 0, said: {}, spd: 0, orbY: 0, orbP: 0, ch: 0, flying: false, depth: 0, tipD: -0.03, snapped: false, bitTurn: 0, axZ: 0, axSet: false, kind: 'core', photos: [], quizAt: -1 });
       tweens.length = 0; for (const k in keys) keys[k] = 0; drag = null; held = 0; foundEl.hidden = true; loadEl.hidden = true; hideAll(); buildList();
     }
     const CHAPS = ['p_load', 'c_load', 'i_load'];
@@ -2856,7 +2817,7 @@ function init3D() {
     function chapter(n) { S.ch = n; keep(n); for (let i = 0; i < n; i++) stepDone(STEPS[i][0]); go(CHAPS[n]); }
     function start() {
       reset(); active = true; finished = false; box.hidden = false; document.body.classList.add('questing'); if (Missions.stopAll) Missions.stopAll();
-      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-memories');
+      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-memories'); Help.fresh('q3:');
       let n = 0; try { n = clamp(parseInt(sessionStorage.getItem('lbf-q3') || '0', 10) || 0, 0, 2); } catch (_) {}
       chapter(n);
     }
@@ -2889,6 +2850,31 @@ function init3D() {
     LBF.rove = { start, stop, go, S, tick, chapter, isDone: () => finished, rigs, keys, hold(v) { held = v ? 1 : 0; }, press, site: () => site, at(p) { lp.copy(p).project(cam); return [(lp.x + 1) / 2 * R.width + R.left, (1 - lp.y) / 2 * R.height + R.top]; } };
   })(); } catch (err) { console.warn('Quest 3 is unavailable:', err); }
   /* ══ Quest 3 end ══ */
+  /* ══ Finale begin ══ */
+  /* The backdrop of the ending: the Moon and Mars, the two worlds of the six quests, hanging in space while Hy says goodbye. */
+  (function () {
+    const stage = $('#fin-stage'); if (!stage) return;
+    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(3.4, 96, 64), globeMat(moonTex)), mars = new THREE.Mesh(new THREE.SphereGeometry(1.7, 64, 48), globeMat(marsTex, 0xffe9dc));
+    const sun = new THREE.DirectionalLight(0xfff4e6, 1.8); sun.position.set(-3, 2.2, 4);
+    const rim = new THREE.DirectionalLight(0x8fb4ff, 0.25); rim.position.set(4, -1, -3);
+    scene.add(moon, mars, sun, rim, new THREE.AmbientLight(0xffffff, 0.05));
+    moon.rotation.set(0.1, -1.4, 0); mars.rotation.set(0.3, 2.4, 0);
+    const look = new THREE.Vector3(), ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x); let t = 0, on = false, goT = -1;
+    views.push({ el: stage, scene, cam, quest: true, update(dt, a) {
+      if (!on) return; t += dt; if (goT >= 0) goT += dt;
+      const wide = a > 1;
+      moon.position.set(wide ? -6.4 : -2.3, wide ? -3.6 : -7.2, 0); mars.position.set(wide ? 7.2 : 2.6, wide ? 3.4 : 6.6, -9);
+      if (!RM) { moon.rotation.y += dt * 0.02; mars.rotation.y += dt * 0.05; }
+      /* a slow push in; when Hy leaves, the camera tilts up after him until both worlds are gone, and then keeps drifting */
+      const push = ease(t / 9), lift = goT < 0 ? 0 : ease(goT / 2.6) + Math.max(0, goT - 2.6) * 0.008;
+      cam.position.set(Math.sin(t * 0.12) * 0.35, 0.2 * push, 15 - 1.6 * push);
+      look.set(lift * 3, lift * 27, -20 * Math.min(1, lift)); cam.lookAt(look);
+      skyAdd.x = cam.rotation.x * 0.9; skyAdd.y = cam.rotation.y * 0.9 + t * 0.004;
+    } });
+    LBF.finale3d = { start() { t = 0; goT = -1; on = true; }, depart() { goT = 0; }, stop() { on = false; skyAdd.x = skyAdd.y = 0; } };
+  })();
+  /* ══ Finale end ══ */
   /* render loop: one canvas, one viewport per stage */
   let last = performance.now(), W = 0, H = 0;
   function frame(now) {
@@ -2897,7 +2883,7 @@ function init3D() {
     if (w !== W || h !== H) { W = w; H = h; renderer.setSize(w, h, false); skyCam.aspect = w / h; skyCam.updateProjectionMatrix(); }
     renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H); renderer.clear();
     const sc = window.scrollY || 0;
-    skyCam.rotation.set(-sc * 0.00012, sc * 0.00006 + (RM ? 0 : now * 0.000004), 0);
+    skyCam.rotation.set(-sc * 0.00012 + skyAdd.x, sc * 0.00006 + (RM ? 0 : now * 0.000004) + skyAdd.y, 0);
     renderer.render(sky, skyCam);
     renderer.setScissorTest(true);
     const questing = document.body.classList.contains('questing');
@@ -2920,39 +2906,50 @@ function init3D() {
 
 /* ───────────────────────── Detective notebook ───────────────────────── */
 const Notebook = (function () {
-  const BADGES = { first: 'Rookie detective', moon: 'Moon expert', mars: 'Mars expert', laser: 'Laser ranger', mystery: 'Mystery cracked', interview: 'Interviewer', tour: 'Rode along', talk: 'Talked to Hy', quiz: 'Quiz badge', walker: 'Moon walker', pin: 'Mars mapper', shadow: 'Shadow spotter', stay: 'Overtime expert' };
+  const BADGES = { first: 'Rookie detective', moon: 'Moon expert', walker: 'Moon walker', laser: 'Laser ranger', rover: 'Mars robot driver', shadow: 'Shadow spotter', mystery: 'Mystery cracked', interview: 'Interviewer', tour: 'Rode along', talk: 'Talked to Hy', quiz: 'Quiz badge', medal: 'Space Detective medal' };
+  /* the six quests in page order: where each one lives, and the badge (any one of them) that proves it is done */
+  const QUESTS = [['#moon', ['walker']], ['#mirrors', ['laser']], ['#mars', ['rover']], ['#models', ['shadow']], ['#ask', ['mystery', 'interview', 'tour', 'talk']], ['#quiz', ['quiz']]];
+  const FILES = C.filter(c => c.world === 'moon');           /* only the Moon has files to open; Mars is a quest */
   const st = { files: [], badges: [] };
   try {
     const o = JSON.parse(localStorage.getItem('lbf-notebook') || '{}');
-    st.files = (o.files || []).filter(id => byId[id]); st.badges = (o.badges || []).filter(b => BADGES[b]);
+    st.files = (o.files || []).filter(id => byId[id] && byId[id].world === 'moon'); st.badges = (o.badges || []).filter(b => BADGES[b]);
   } catch (_) {}
   const save = () => { try { localStorage.setItem('lbf-notebook', JSON.stringify(st)); } catch (_) {} };
-  let toastT = null;
+  const done = i => QUESTS[i][1].some(b => st.badges.includes(b));
+  const left = () => QUESTS.map((q, i) => i).filter(i => !done(i));
+  let toastT = null, onAll = null;
   function toast(text) {
     let t = $('#toast');
     if (!t) { t = el('div', { id: 'toast', role: 'status', style: 'position:fixed;left:14px;bottom:14px;z-index:50;background:#ff9a3d;color:#17171a;font-family:var(--display);padding:10px 14px 8px;border-radius:3px;box-shadow:0 10px 40px rgba(0,0,0,.7);max-width:calc(100vw - 28px)' }); document.body.append(t); }
     t.textContent = text; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 4500);
   }
   function render() {
-    $('#nb-count').textContent = st.files.length + ' of ' + C.length + ' files opened. ' + st.badges.length + ' of ' + Object.keys(BADGES).length + ' badges earned.';
-    $('#nb-stamps').replaceChildren(...C.map(c => el('i', { class: 's-' + c.status + (st.files.includes(c.id) ? ' got' : ''), title: c.name })));
+    $('#nb-count').textContent = st.files.length + ' of ' + FILES.length + ' Moon files opened. ' + st.badges.length + ' of ' + Object.keys(BADGES).length + ' badges earned.';
+    $('#nb-stamps').replaceChildren(...FILES.map(c => el('i', { class: 's-' + c.status + (st.files.includes(c.id) ? ' got' : ''), title: c.name })));
     $('#nb-badges').replaceChildren(...Object.keys(BADGES).map(k => el('li', { class: st.badges.includes(k) ? 'got' : '', text: BADGES[k] })));
+    $$('.bar nav a').forEach(a => { const i = QUESTS.findIndex(q => q[0] === a.getAttribute('href')); if (i >= 0) a.classList.toggle('done', done(i)); });
+    const n = left().length, note = $('#fin-left'), open = $('#fin-open');
+    if (note) note.textContent = n ? (6 - n) + ' of 6 quests done. Finish all six to see the ending.' : 'All six quests done.';
+    if (open) open.hidden = n > 0;
   }
   function badge(k) {
     if (!BADGES[k] || st.badges.includes(k)) return;
+    const was = left().length;
     st.badges.push(k); save(); render(); toast('New badge for your notebook: ' + BADGES[k]);
+    if (was > 0 && !left().length && onAll) onAll();             /* that was the sixth quest: roll the ending */
   }
   function file(id) {
-    if (st.files.includes(id)) return;
+    if (!byId[id] || byId[id].world !== 'moon' || st.files.includes(id)) return;
     st.files.push(id); save(); render();
     if (st.files.length >= 3) badge('first');
-    ['moon', 'mars'].forEach(w => { if (C.filter(c => c.world === w).every(c => st.files.includes(c.id))) badge(w); });
+    if (FILES.every(c => st.files.includes(c.id))) badge('moon');
   }
   render();
-  return { badge, file };
+  return { badge, file, left, where: i => QUESTS[i][0], whenAll(fn) { onAll = fn; } };
 })();
 
-/* ───────────────────────── Missions: mystery machine and ride-along tours ───────────────────────── */
+/* ───────────────────────── Missions: mystery machine and the ride-along tour, both on the Moon ───────────────────────── */
 const Missions = (function () {
   let mystery = null, tour = null;
   const ban = w => $('#mis-' + w);
@@ -2964,7 +2961,7 @@ const Missions = (function () {
       el('div', { class: 'row' }, ...buttons.filter(Boolean).map(([label, fn, ghost]) => el('button', { class: 'btn onpaper' + (ghost ? ' ghost' : ''), text: label, onclick: fn }))));
     b.classList.add('on');
   }
-  function clear() { ['moon', 'mars'].forEach(w => { ban(w).classList.remove('on'); ban(w).replaceChildren(); }); }
+  function clear() { ban('moon').classList.remove('on'); ban('moon').replaceChildren(); }
 
   /* --- mystery machine --- */
   function mask(c, text) {
@@ -2990,15 +2987,14 @@ const Missions = (function () {
     ]);
   }
   function startMystery() {
-    stopAll();
-    const pool = C.filter(c => c.status !== 'lost'), c = pool[Math.floor(Math.random() * pool.length)];
+    stopAll(); Help.fresh('mystery');
+    const pool = C.filter(c => c.world === 'moon' && c.status !== 'lost'), c = pool[Math.floor(Math.random() * pool.length)];
     mystery = { id: c.id, clue: 0, tries: 0, hint: '', clues: clues(c) };
     reveal(c.world); showClue();
     say("I'm thinking of one machine on " + WORLD_NAME[c.world] + ". " + mystery.clues[0] + " Click its light on the globe when you think you've found it.", true);
   }
   function guess(c) {
     const t = byId[mystery.id];
-    if (c.world !== t.world) { say('Wrong world, partner. Our machine is on ' + WORLD_NAME[t.world] + '.', true); reveal(t.world); return; }
     if (c.id === t.id) return endMystery(true);
     mystery.tries++;
     mystery.hint = 'Not ' + c.name + '. Our machine arrived ' + (c.year === t.year ? 'in the same year' : t.year < c.year ? 'earlier than that' : 'later than that') + '.';
@@ -3015,13 +3011,10 @@ const Missions = (function () {
     say(won ? "You cracked it! That's " + c.name + '. Fine detective work, partner.' : 'It was ' + c.name + '. A tough one. Read the file, then try another.', true);
   }
 
-  /* --- ride-along tours --- */
-  const TOURS = {
-    moon: ['surveyor1', 'surveyor3', 'apollo11', 'apollo15', 'prospector', 'lcross', 'blueghost'],
-    mars: ['viking1', 'pathfinder', 'opportunity', 'phoenix', 'curiosity', 'insight', 'perseverance', 'ingenuity']
-  };
+  /* --- ride-along tour --- */
+  const TOURS = { moon: ['surveyor1', 'surveyor3', 'apollo11', 'apollo15', 'prospector', 'lcross', 'blueghost'] };
   async function startTour(w) {
-    stopAll();
+    w = 'moon'; stopAll();
     const run = tour = { stop: false, skip: null }, stops = TOURS[w];
     reveal(w); Notebook.badge('tour');
     for (let i = 0; i < stops.length && !run.stop; i++) {
@@ -3035,12 +3028,13 @@ const Missions = (function () {
     }
     if (run.stop) return;
     tour = null;
-    const other = w === 'moon' ? 'mars' : 'moon';
-    banner(w, 'End of the line', 'That was the ' + (w === 'moon' ? 'Moon' : 'Mars') + ' tour.', [['Take the ' + (other === 'moon' ? 'Moon' : 'Mars') + ' tour', () => startTour(other)], ['Close', clear, true]]);
+    banner(w, 'End of the line', 'That was the Moon tour.', [['Play mystery machine', startMystery], ['Close', clear, true]]);
     say("That's the tour. Now go poke around yourself. Every light has a story.", true);
   }
   function stopTour() { if (tour) { tour.stop = true; if (tour.skip) tour.skip(); tour = null; Voice.stop(); } clear(); }
   function stopAll() { stopTour(); mystery = null; clear(); }
+  /* Hy watches the mystery too: stuck on one clue for ten seconds, and he explains what to do */
+  PARTS.push(() => mystery && !chatMode && inView($('#st-moon')) ? ['mystery', mystery.clue * 10 + mystery.tries] : null);
   return {
     startMystery, startTour, stopAll,
     /* a click on a light or a list entry: a guess during a mystery, and it ends a running tour */
@@ -3050,15 +3044,18 @@ const Missions = (function () {
 $('#m-mystery').addEventListener('click', Missions.startMystery);
 $$('[data-tour]').forEach(b => b.addEventListener('click', () => Missions.startTour(b.dataset.tour)));
 
-/* ───────────────────────── Talking with Hy ───────────────────────── */
+/* ───────────────────────── Talking with Hy: the child taps a question. Nobody types. ───────────────────────── */
 const chat = $('#chat'), log = $('#log'), modeEl = $('#mode');
-const STARTERS = ['Take me to a machine that still works', 'Why did Opportunity stop working?', 'How do the mirrors on the Moon work?', 'Show me the helicopter that flew on Mars', 'Did anything find water?', 'Why are you a hydrogen atom?'];
+const NOW = 'What do I do now?';
+const PROMPTS = [NOW, 'Which machines still work?', 'Why did Opportunity stop working?', 'How do the mirrors on the Moon work?', 'Tell me about the Mars helicopter', 'Where are the Mars rock tubes?', 'Did anything find water?', 'Who walked on the Moon first?', 'Why are you a hydrogen atom?'];
+const ASK_THEM = ['What was your landing like?', 'What is the coolest thing you found?', 'Are you still working?', 'What did you leave behind?'];
+const YESNO = ['Did astronauts go there?', 'Is it a robot lander?', 'Did it arrive before 1980?', 'Is it still working?', 'Did it crash on purpose?'];
 const BRIEF = LBF.buildPrompt();
 const ENDPOINT = (LBF.AI_ENDPOINT || '').trim();
-let sample = null, history = [], busy = false, greeted = false, chatMode = null;
+let sample = null, history = [], busy = false, greeted = false, chatMode = null, lineDown = 0, toldDown = false;
 
 function setMode() {
-  const live = !!sample || !!ENDPOINT;
+  const live = !!sample || (!!ENDPOINT && performance.now() >= lineDown);
   modeEl.textContent = live ? 'Live AI' : 'Case-file mode';
   modeEl.classList.toggle('live', live);
   $('#ask-mode').textContent = live ? 'Hy answers with live AI, grounded in the NASA case files on this page.' : 'Hy is answering from the case files on this page.';
@@ -3081,42 +3078,43 @@ async function askServer(turns, mode) {
   } finally { clearTimeout(timer); }
 }
 
-function closeChat() { chat.classList.remove('open'); guide.classList.remove('chatting'); }
+function closeChat() {
+  chat.classList.remove('open', 'helping'); guide.classList.remove('chatting');
+  if (chat.contains(document.activeElement)) document.activeElement.blur();     /* so Space and the arrow keys go back to the game */
+}
 function greet() {
   if (greeted) return; greeted = true;
-  addMsg('hy', "Pull up a chair, kid. Ask me about any machine on the Moon or Mars and I'll take you there. Or say the word and we'll play a game.");
+  addMsg('hy', "Pull up a chair, kid. Tap a question and I'll answer. Some answers take you places.");
 }
 function openChat() {
   chat.classList.add('open'); guide.classList.add('chatting');
   if (!chatMode) greet();
-  setTimeout(() => { try { $('#chat-q').focus({ preventScroll: true }); } catch (_) {} }, 50);
 }
 function addMsg(who, text) { const m = el('div', { class: 'msg ' + who, text }); log.append(m); log.scrollTop = log.scrollHeight; return m; }
-function setChips(list) {
-  const box = $('#chat-qs'); box.replaceChildren();
-  list.forEach(q => box.append(el('button', { type: 'button', text: q, onclick: () => ask(q) })));
+/* the buttons under the conversation: Hy's own follow-ups first (when the live AI wrote some), then the fixed list for this kind of talk */
+function setChips(extra) {
+  const base = chatMode ? (chatMode.type === 'interview' ? ASK_THEM : YESNO) : PROMPTS, box = $('#chat-qs'); box.replaceChildren();
+  (extra || []).filter(q => !base.includes(q)).concat(base).forEach(q => box.append(el('button', { type: 'button', text: q, onclick: () => ask(q) })));
 }
 
 /* Interview and mystery modes change who is talking */
 function startMode(m) {
   const c = byId[m.id]; if (!c) return;
-  chatMode = m; history = []; log.replaceChildren(); chat.classList.add('mode'); Voice.stop();
+  chatMode = m; history = []; log.replaceChildren(); chat.classList.add('mode'); chat.classList.remove('helping'); Voice.stop();
   if (m.type === 'interview') {
     $('#chat-title').textContent = 'Interview: ' + c.name;
-    const hi = "Hello! I'm " + c.name + '. I reached ' + WORLD_NAME[c.world] + ' in ' + c.year + '. Ask me anything about my mission.';
+    const hi = "Hello! I'm " + c.name + '. I reached ' + WORLD_NAME[c.world] + ' in ' + c.year + '. Tap a question for me.';
     addMsg('them', hi); Voice.speak(hi, { pitch: 0.8, rate: 0.98 });
-    setChips(['What was your landing like?', 'What is the coolest thing you found?', 'Are you still working?']);
     openCase(c.id, { quiet: true }); Notebook.badge('interview');
   } else {
     $('#chat-title').textContent = 'Mystery: yes or no?';
-    addMsg('hy', "Ask me yes-or-no questions about the mystery machine. I won't say its name.");
-    setChips(['Is it a rover?', 'Did it arrive before 1980?', 'Is it still working?']);
+    addMsg('hy', "Tap a yes-or-no question about the mystery machine. I won't say its name.");
   }
-  openChat();
+  setChips(); openChat();
 }
 function endMode() {
   chatMode = null; history = []; log.replaceChildren(); chat.classList.remove('mode'); Voice.stop();
-  $('#chat-title').textContent = 'Talk to Hy'; greeted = false; greet(); setChips(STARTERS.slice(0, 4));
+  $('#chat-title').textContent = 'Talk to Hy'; greeted = false; greet(); setChips();
 }
 $('#chat-back').addEventListener('click', endMode);
 (function () {
@@ -3127,7 +3125,7 @@ $('#chat-back').addEventListener('click', endMode);
 })();
 LBF.interview = id => startMode({ type: 'interview', id });
 
-/* Hy's replies can carry control lines such as [[go:curiosity]]; pull them out and act on them */
+/* Hy's replies can carry control lines such as [[go:apollo15]]; pull them out and act on them */
 function parseReply(raw) {
   const r = { next: [] };
   r.text = String(raw).replace(/\[\[(go|model|do|next):([^\]]*)\]\]/g, (m, k, v) => {
@@ -3138,75 +3136,115 @@ function parseReply(raw) {
   }).replace(/\[\[[^\]]*\]\]/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   return r;
 }
+const goTo = id => () => { const t = $(document.body.classList.contains('locked') ? '#story' : id); if (t) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); };
 const DO = {
-  laser: ['Try the laser experiment', () => $('#mirrors').scrollIntoView({ behavior: RM ? 'auto' : 'smooth' })],
+  laser: ['Try the laser quest', goTo('#mirrors')],
   mystery: ['Play mystery machine', () => Missions.startMystery()],
   'tour-moon': ['Take the Moon tour', () => Missions.startTour('moon')],
-  'tour-mars': ['Take the Mars tour', () => Missions.startTour('mars')],
-  rovers: ['Play the Mars robots quest', () => $('#mars').scrollIntoView({ behavior: RM ? 'auto' : 'smooth' })],
-  quiz: ['Take the quiz', () => $('#quiz').scrollIntoView({ behavior: RM ? 'auto' : 'smooth' })]
+  rovers: ['Play the Mars robots quest', goTo('#mars')],
+  quiz: ['Play Real or fake', goTo('#quiz')]
 };
+DO['tour-mars'] = DO.rovers;
 function applyReply(bot, r) {
   const acts = el('div', { class: 'acts' }), small = innerWidth < 900;
-  const after = fn => () => { fn(); if (small) closeChat(); };
+  const after = fn => () => { fn(); if (small || document.body.classList.contains('questing')) closeChat(); };
   if (!chatMode && r.go && byId[r.go]) {
     const c = byId[r.go];
-    openCase(c.id, { quiet: true, reveal: !small });          /* the globe turns while Hy talks */
-    acts.append(el('button', { text: 'Open file ' + c.file + ': ' + c.name, onclick: after(() => openCase(c.id, { quiet: true, reveal: true })) }));
+    if (c.world === 'moon') {
+      openCase(c.id, { quiet: true, reveal: !small });          /* the Moon turns while Hy talks */
+      acts.append(el('button', { text: 'Open file ' + c.file + ': ' + c.name, onclick: after(() => openCase(c.id, { quiet: true, reveal: true })) }));
+    } else { if (!r.model && c.model) r.model = c.model; if (!r.do) r.do = 'rovers'; }      /* Mars has no map: show its model and offer the quest */
   }
   if (!chatMode && r.model && LBF.MODELS[r.model]) {
-    if (!r.go) showModel(r.model);
-    acts.append(el('button', { text: 'Spin the ' + LBF.MODELS[r.model].name + ' in 3D', onclick: after(() => { showModel(r.model); $('#models').scrollIntoView({ behavior: RM ? 'auto' : 'smooth' }); }) }));
+    acts.append(el('button', { text: 'Spin the ' + LBF.MODELS[r.model].name + ' in 3D', onclick: after(() => { showModel(r.model); goTo('#models')(); }) }));
   }
   if (!chatMode && r.do && DO[r.do]) acts.append(el('button', { text: DO[r.do][0], onclick: after(DO[r.do][1]) }));
+  if (r.act) acts.append(el('button', { text: r.act[0], onclick: after(r.act[1]) }));
   if (acts.children.length) bot.append(acts);
-  if (r.next.length) setChips(r.next);
+}
+
+/* "What do I do now?": inside a puzzle Hy explains this step; anywhere else he points at the next quest */
+function whatNow() {
+  const k = Help.current(), H = LBF.HELP;
+  if (k) return { text: H[k] };
+  if (document.body.classList.contains('questing')) return { text: H.watch };
+  const L = Notebook.left();
+  if (!L.length) return { text: H['next:done'], act: ['Watch the ending', () => Finale.play()] };
+  if (document.body.classList.contains('locked')) return { text: H['next:0'], act: ['Take me there', goTo('#story')] };
+  return { text: H['next:' + L[0]], act: ['Take me there', goTo(Notebook.where(L[0]))] };
+}
+/* the mystery game's yes-or-no questions are answered straight from the file, so they always work */
+function yesNo(c, q) {
+  const A = {
+    'Did astronauts go there?': [c.kind === 'crew', 'People walked there.', 'No person has been there.'],
+    'Is it a robot lander?': [c.kind === 'lander', 'It landed with nobody on board.', 'Think of people, or of a crash.'],
+    'Did it arrive before 1980?': [c.year < 1980, 'It is from the early days.', 'It is newer than that.'],
+    'Is it still working?': [c.status === 'active' || c.status === 'mirror', 'One part still does its job.', 'It has gone quiet.'],
+    'Did it crash on purpose?': [c.status === 'impact', 'It hit the Moon so scientists could watch.', 'It was meant to land gently.']
+  }[q];
+  return A ? (A[0] ? 'Yes. ' + A[1] : 'No. ' + A[2]) : 'Tap one of the questions below, partner.';
+}
+/* a machine answering from its own file, when the live AI is away */
+function asMachine(c, q) {
+  const i = ASK_THEM.indexOf(q), first = (c.story.match(/^.*?[.!?](?=\s|$)/) || [c.story])[0];
+  if (i === 0) return 'I reached ' + WORLD_NAME[c.world] + ' on ' + c.date + ', at ' + c.site + '. My file says: ' + first;
+  if (i === 1) return 'Here is what my file says. ' + c.science;
+  if (i === 2) return ({ active: 'Yes! I am still working today.', mirror: 'Yes. My mirror needs no power, so lasers still bounce off it.', silent: 'No. I have gone quiet, but I am still here.', impact: 'No. I ended my mission by hitting the ground, on purpose.', lost: 'No. Nobody has heard from me.' })[c.status];
+  if (i === 3) return 'Still there today: ' + c.left;
+  return 'My radio link is weak right now, so here is what my file says. ' + c.story + ' ' + c.science;
 }
 
 async function ask(q) {
   q = (q || '').trim(); openChat(); if (!q || busy) return;
-  busy = true; Voice.stop(); addMsg('me', q);
+  busy = true; chat.classList.remove('helping'); Voice.stop(); addMsg('me', q);          /* the child is talking now, so the box stays open */
   const mode = chatMode, who = mode && mode.type === 'interview' ? byId[mode.id] : null;
   const bot = addMsg(who ? 'them' : 'hy', who ? 'Thinking…' : 'Checking the files…');
-  guideState.think = true;
-  const turns = history.slice(-8).concat([{ role: 'user', content: q }]);
-  const modeLine = mode ? mode.type + ' ' + mode.id : '';
-  let answer = null;
-  if (sample) {
-    try {
-      const msgs = turns.map((m, i) => i === 0 ? { role: 'user', content: BRIEF + (modeLine ? '\n\nACTIVE MODE: ' + modeLine : '') + '\n\nToday is ' + new Date().toDateString() + '.\n\nThe kid says: ' + m.content } : m);
-      const res = await sample(msgs, { onText: ({ text }) => { const t = text.replace(/\[\[[^\]]*(\]\]|$)/g, '').trim(); if (t) { bot.textContent = t; log.scrollTop = log.scrollHeight; } }, cache: false });
-      answer = (res && res.text || '').trim() || null;
-    } catch (err) {
-      const code = err && err.code;
-      if (code === 'not_granted' || code === 'sampling_disabled' || code === 'not_declared') { sample = null; setMode(); }
-      else if (code === 'rate_limited') addMsg('note', 'The live AI line is busy. Try again in a minute.');
+  let r = null, live = false;
+  if (!mode && q === NOW) r = whatNow();
+  else if (mode && mode.type === 'mystery') r = { text: yesNo(byId[mode.id], q) };
+  else {
+    guideState.think = true;
+    const turns = history.slice(-8).concat([{ role: 'user', content: q }]);
+    const modeLine = mode ? mode.type + ' ' + mode.id : '';
+    let answer = null;
+    if (sample) {
+      try {
+        const msgs = turns.map((m, i) => i === 0 ? { role: 'user', content: BRIEF + (modeLine ? '\n\nACTIVE MODE: ' + modeLine : '') + '\n\nToday is ' + new Date().toDateString() + '.\n\nThe kid says: ' + m.content } : m);
+        const res = await sample(msgs, { onText: ({ text }) => { const t = text.replace(/\[\[[^\]]*(\]\]|$)/g, '').trim(); if (t) { bot.textContent = t; log.scrollTop = log.scrollHeight; } }, cache: false });
+        answer = (res && res.text || '').trim() || null;
+      } catch (err) {
+        const code = err && err.code;
+        if (code === 'not_granted' || code === 'sampling_disabled' || code === 'not_declared') { sample = null; setMode(); }
+      }
     }
+    if (!answer && ENDPOINT && performance.now() >= lineDown) {
+      try { answer = (await askServer(turns, modeLine || undefined)).trim() || null; }
+      catch (err) {                                   /* the line is down: stop ringing it for five minutes, and say so once */
+        lineDown = performance.now() + 300000; setMode();
+        if (!toldDown) { toldDown = true; addMsg('note', 'The live AI line is resting. Hy is answering from the case files.'); }
+      }
+    }
+    if (answer) { r = parseReply(answer); live = true; }
+    else if (who) r = { text: asMachine(who, q) };
+    else { const off = offlineAnswer(q); r = { text: off.text, go: off.id, model: off.model, do: off.do }; }
+    guideState.think = false;
   }
-  if (!answer && ENDPOINT) {
-    try { answer = (await askServer(turns, modeLine || undefined)).trim() || null; }
-    catch (err) { addMsg('note', err && err.status === 429 ? 'Hy is getting a lot of questions right now. This answer comes from the case files.' : 'The live AI line is not answering. This answer comes from the case files.'); }
-  }
-  let r;
-  if (answer) r = parseReply(answer);
-  else if (who) r = { text: "My radio link is weak right now, so here is what my file says. " + who.story + ' ' + who.science, next: [] };
-  else if (mode) r = { text: 'I can only answer yes-or-no questions when my live line is up. Use the clues on the globe, partner.', next: [] };
-  else { const off = offlineAnswer(q); r = { text: off.text, go: off.id, next: [] }; }
-  bot.textContent = r.text || 'I lost my train of thought. Ask me again?';
+  bot.textContent = r.text || 'I lost my train of thought. Tap a question again?';
   applyReply(bot, r);
+  setChips(live ? r.next : []);
   history.push({ role: 'user', content: q }, { role: 'assistant', content: r.text });
   log.scrollTop = log.scrollHeight;
-  guideState.think = false; busy = false;
-  Notebook.badge('talk');
+  busy = false;
+  if (!mode && q !== NOW) Notebook.badge('talk');
   Voice.speak(r.text, who ? { pitch: 0.8, rate: 0.98 } : undefined);
 }
 LBF.ask = ask;
 
-/* Answers built from the case files, used when live AI is not available. */
+/* Answers built from the case files, used when live AI is not available. Every question on Hy's list has one. */
 function offlineAnswer(q) {
   const s = ' ' + q.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ') + ' ';
   const has = (...w) => w.some(x => s.includes(x));
-  const ALIAS = { pathfinder: ['sojourner', 'pathfinder'], mpl: ['polar lander', 'deep space 2'], grail: ['grail', ' ebb', ' flow '], odysseus: ['odysseus', 'im 1', 'intuitive machines'], athena: ['athena', 'im 2'], blueghost: ['blue ghost', 'firefly', 'nglr'], prospector: ['prospector'], perseverance: ['perseverance', 'percy', 'moxie', 'jezero'], curiosity: ['curiosity', 'gale', 'mount sharp'], ingenuity: ['ingenuity', 'helicopter', ' fly ', 'flew', 'flight'], insight: ['insight', 'marsquake', 'quake'], opportunity: ['opportunity', 'oppy'], phoenix: ['phoenix'], lcross: ['lcross'], ladee: ['ladee'], viking1: ['viking 1', 'viking'], viking2: ['viking 2'], apollo11: ['apollo 11', 'first people', 'first moon landing', 'armstrong', 'aldrin'] };
+  const ALIAS = { pathfinder: ['sojourner', 'pathfinder'], mpl: ['polar lander', 'deep space 2'], grail: ['grail', ' ebb', ' flow '], odysseus: ['odysseus', 'im 1', 'intuitive machines'], athena: ['athena', 'im 2'], blueghost: ['blue ghost', 'firefly', 'nglr'], prospector: ['prospector'], perseverance: ['perseverance', 'percy', 'moxie', 'jezero'], curiosity: ['curiosity', 'gale', 'mount sharp'], ingenuity: ['ingenuity', 'helicopter', ' fly ', 'flew', 'flight'], insight: ['insight', 'marsquake', 'quake'], opportunity: ['opportunity', 'oppy'], phoenix: ['phoenix'], lcross: ['lcross'], ladee: ['ladee'], viking1: ['viking 1', 'viking'], viking2: ['viking 2'], apollo11: ['apollo 11', 'first people', 'first moon landing', 'walked on the moon', 'armstrong', 'aldrin'] };
   let best = null, score = 0;
   C.forEach(c => {
     let sc = 0; const nm = c.name.toLowerCase();
@@ -3217,9 +3255,10 @@ function offlineAnswer(q) {
   const m = s.match(/(apollo|surveyor|ranger|viking) (\d+)/);
   if (m) { const c = C.find(x => x.name.toLowerCase() === m[1] + ' ' + m[2]); if (c) { best = c; score = 9; } else return { text: "That one isn't in my cabinet, kid. My Moon files cover Ranger 7, Surveyors 1, 3, 5, 6 and 7, and Apollo 11, 12, 14, 15, 16 and 17." }; }
   if (has('who are you', 'your name', 'why are you', 'hydrogen', 'what are you')) return { text: "I'm Hy Drogen: one proton, one electron, and a nose for clues. Hydrogen is the most common atom in the universe, so I get into every case. Detectors on Lunar Prospector and Curiosity even hunt for hydrogen, because where there's hydrogen there may be water." };
+  if (has('tube', 'sample', 'rock core')) return { model: 'percy', do: 'rovers', text: "Still on Mars, kid. Perseverance drills rock cores and seals each one in a tube. By July 2025 it had filled 33 of them, and ten wait on the ground at a spot called Three Forks. The mission to fetch them was cancelled, so NASA is looking for another way to bring them home." };
   if (best && score >= 4) return { id: best.id, text: 'File ' + best.file + ', ' + best.name + '. ' + best.story + ' ' + best.science + ' ' + best.clue };
-  if (has('mirror', 'reflector', 'laser')) return { id: 'apollo15', text: "Apollo 11, 14 and 15 left trays of glass prisms on the Moon. Each prism sends light straight back where it came from. Scientists fire a laser, time the echo (about 2.5 seconds) and get the distance to about a millimeter. That's how we know the Moon drifts away 3.8 cm a year." };
-  if (has('still work', 'still active', 'still alive', 'working', 'still driving', 'active', 'still works')) return { id: 'perseverance', text: 'As of November 2026, two machines are still driving on Mars: Curiosity, since 2012, and Perseverance, since 2021. On the Moon, the Apollo laser mirrors and the new Blue Ghost mirror still work, because a mirror needs no power.' };
+  if (has('mirror', 'reflector', 'laser')) return { id: 'apollo15', do: 'laser', text: "Apollo 11, 14 and 15 left trays of glass prisms on the Moon. Each prism sends light straight back where it came from. Scientists fire a laser, time the echo (about 2.5 seconds) and get the distance to about a millimeter. That's how we know the Moon drifts away 3.8 cm a year." };
+  if (has('still work', 'still active', 'still alive', 'working', 'still driving', 'active', 'still works')) return { model: 'curio', do: 'rovers', text: 'As of November 2026, two machines are still driving on Mars: Curiosity, since 2012, and Perseverance, since 2021. On the Moon, the Apollo laser mirrors and the new Blue Ghost mirror still work, because a mirror needs no power.' };
   if (has('water', ' ice ')) return { id: 'lcross', text: "Plenty of clues, kid. Lunar Prospector found extra hydrogen at the Moon's poles, and LCROSS confirmed water there in 2009. On Mars, Phoenix dug up water ice, and Spirit, Opportunity, Curiosity and Perseverance all found signs of ancient water." };
   if (has('how many', 'list', 'all the')) { const mo = C.filter(c => c.world === 'moon').length, ma = C.length - mo; return { text: 'My cabinet holds ' + mo + ' Moon files and ' + ma + ' Mars files. They cover every NASA lander, rover and helicopter that reached Mars, the Apollo and Surveyor sites, and the most important crash sites. There is even more out there: spent rocket stages, old orbiters and landing gear.' }; }
   if (has('first') && has('mars')) best = byId.viking1, score = 5;
@@ -3229,35 +3268,158 @@ function offlineAnswer(q) {
   if (has('lost', 'missing', 'never found', 'disappear')) best = byId.mpl, score = 5;
   if (has('car', 'buggy', 'lunar rover', 'moon rover')) best = byId.apollo15, score = 5;
   if (best && score >= 4) return { id: best.id, text: 'File ' + best.file + ', ' + best.name + '. ' + best.story + ' ' + best.science + ' ' + best.clue };
-  return { text: "I can't crack that one from the case files alone, partner. Try asking about a machine by name, like Curiosity, Ingenuity or Apollo 15, or ask which machines still work, how the mirrors work, or who found water." };
+  return { text: "That one is not in my files, partner. Tap one of the questions below." };
 }
 
-/* talking to Hy with the microphone, where the browser allows it */
-(function () {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = $('#mic'); let rec = null;
-  if (!SR) return;
-  mic.classList.add('ok');
-  mic.addEventListener('click', () => {
-    if (rec) { rec.stop(); return; }
-    try {
-      Voice.stop(); rec = new SR(); rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1;
-      rec.onresult = e => { const t = e.results && e.results[0] && e.results[0][0] && e.results[0][0].transcript; if (t) ask(t); };
-      rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { addMsg('note', 'The microphone is blocked here. You can still type.'); mic.classList.remove('ok'); } };
-      rec.onend = () => { rec = null; mic.classList.remove('live'); mic.textContent = 'Talk'; };
-      rec.start(); mic.classList.add('live'); mic.textContent = 'Listening…';
-    } catch (e) { rec = null; }
-  });
-})();
-
-STARTERS.forEach(q => $('#ask-qs').append(el('button', { type: 'button', text: q, onclick: () => ask(q) })));
-setChips(STARTERS.slice(0, 4));
-$('#ask-form').addEventListener('submit', e => { e.preventDefault(); const i = $('#ask-q'); ask(i.value || i.placeholder); i.value = ''; });
-$('#chat-form').addEventListener('submit', e => { e.preventDefault(); const i = $('#chat-q'); if (i.value.trim()) ask(i.value); i.value = ''; });
+PROMPTS.forEach(q => $('#ask-qs').append(el('button', { type: 'button', text: q, onclick: () => ask(q) })));
+setChips();
 $('#chat-x').addEventListener('click', closeChat);
 $('#guide-btn').addEventListener('click', () => { chat.classList.contains('open') ? closeChat() : openChat(); });
 $('#bubble-ask').addEventListener('click', openChat);
 $$('[data-ask]').forEach(b => b.addEventListener('click', () => ask(b.dataset.ask)));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat(); });
+
+/* ───────────────────────── Hy steps in when the child is stuck ───────────────────────── */
+/* Every puzzle reports which part the child is on, and a number that grows when they get somewhere.
+   Ten seconds on one part with no progress, and Hy's chat opens by itself with what to do. He says it once per part. */
+const Help = (function () {
+  const LIMIT = 10;
+  let key = null, best = null, idle = 0, told = {}, shown = false, gains = 0, last = 0;
+  function give(k) {
+    const b = document.body.classList;
+    if (b.contains('intro-on') || b.contains('finale-on') || chatMode || busy) return false;
+    greeted = true; chat.classList.add('open', 'helping'); guide.classList.add('chatting'); shown = true; gains = 0;
+    addMsg('hy help', LBF.HELP[k]); setChips(); Sfx.tick(); G.react('yes'); Voice.speak(LBF.HELP[k]);
+    return true;
+  }
+  function part(k, dt, prog) {
+    const now = performance.now(); dt = Math.max(dt || 0, Math.min(1, (now - last) / 1000)); last = now;      /* real seconds, even when a slow device draws few frames */
+    if (!k || !LBF.HELP[k]) k = null;
+    if (k !== key) {
+      if (shown && chat.classList.contains('helping')) closeChat();          /* that part is behind them: Hy steps back */
+      shown = false; key = k; best = prog == null ? null : prog; idle = 0; return;
+    }
+    if (!k) return;
+    if (prog != null && (best == null || prog > best)) {
+      best = prog; idle = 0;
+      if (shown && ++gains >= 3 && chat.classList.contains('helping')) { closeChat(); shown = false; }      /* they have got the idea: Hy steps back */
+      return;
+    }
+    idle += dt;
+    if (idle >= LIMIT && !told[k]) { if (give(k)) told[k] = 1; else idle = LIMIT - 3; }
+  }
+  return { part, current: () => key, fresh(prefix) { for (const k in told) if (k.indexOf(prefix) === 0) delete told[k]; } };
+})();
+/* puzzles that live on the page (not inside a quest) are checked twice a second */
+setInterval(() => {
+  if (document.hidden || document.body.classList.contains('questing')) return;
+  let r = null; for (const f of PARTS) { r = f(); if (r) break; }
+  Help.part(r && r[0], 0.5, r ? r[1] : null);
+}, 500);
+
+/* ───────────────────────── The ending: a ten-second scene, then the credits ───────────────────────── */
+/* It plays once all six quests are done. Hy appears between the Moon and Mars, says well done, hands over a medal,
+   wishes the child luck and flies off into the stars. Then the credits roll. */
+const Finale = (function () {
+  const box = $('#finale'), F = LBF.FINALE; if (!box || !F) return { play() {}, queue() {} };
+  const hy = $('#fin-hy'), lineEl = $('#fin-line'), medal = $('#fin-medal'), star = $('#fin-star'), credits = $('#fin-credits'), roll = $('#fin-roll'), endEl = $('#fin-end'), skip = $('#fin-skip'), flashEl = $('#fin-flash');
+  const M = window.LBF_MEDIA || {}, vids = {};
+  let on = false, timers = [], typing = null, rollAnim = null, ready = null;
+  const at = (s, fn) => timers.push(setTimeout(() => { if (on) fn(); }, s * 1000));
+  /* Hy's four clips, sharper than the little ones in the corner; each falls back to the small clip if its file is missing */
+  function load() {
+    if (ready) return ready;
+    ready = Promise.all(['appear', 'speaking', 'yes', 'disappear'].map(n => new Promise(res => {
+      const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true'); v.preload = 'auto'; v.loop = n === 'speaking';
+      let tried = false; const ok = () => res();
+      v.addEventListener('canplaythrough', ok, { once: true });
+      v.addEventListener('error', () => { if (!tried && M[n]) { tried = true; v.src = M[n]; } else ok(); });
+      v.src = 'assets/fin-' + n + '.mp4'; hy.firstElementChild.append(v); vids[n] = v; setTimeout(ok, 3500);
+    })));
+    return ready;
+  }
+  function show(n, from) {
+    const v = vids[n]; if (!v) return;
+    try { v.currentTime = from || 0; } catch (_) {}
+    const swap = () => { for (const k in vids) { vids[k].classList.toggle('on', vids[k] === v); if (vids[k] !== v) vids[k].pause(); } };
+    const p = v.play(); if (p && p.then) p.then(swap).catch(swap); else swap();
+  }
+  function caption(text) {                          /* typed out like the rest of Hy's lines, and spoken if his voice is on */
+    clearInterval(typing); lineEl.classList.remove('out'); Voice.speak(text);
+    const t0 = performance.now(); lineEl.textContent = '';                  /* by the clock, so a slow device still finishes the line on time */
+    typing = setInterval(() => { const i = Math.floor((performance.now() - t0) / 26) + 1; lineEl.textContent = text.slice(0, i); if (i >= text.length) clearInterval(typing); }, 26);
+  }
+  function flash() { flashEl.style.transition = 'none'; flashEl.style.opacity = 0.75; void flashEl.offsetWidth; flashEl.style.transition = 'opacity .5s ease-out'; flashEl.style.opacity = 0; }
+  function clearAll() { timers.forEach(clearTimeout); timers = []; clearInterval(typing); if (rollAnim) { try { rollAnim.cancel(); } catch (_) {} rollAnim = null; } }
+  function resetLook() {
+    box.className = ''; hy.className = ''; medal.className = ''; medal.hidden = true; star.className = ''; lineEl.textContent = ''; lineEl.classList.remove('out');
+    credits.hidden = true; endEl.hidden = true; skip.hidden = false; roll.style.transform = '';
+    for (const k in vids) { vids[k].classList.remove('on'); vids[k].pause(); }
+  }
+  function buildCredits() {
+    roll.replaceChildren(...F.credits.map(([head, names], n) => el('div', { class: 'cr' + (n === 0 ? ' title' : '') }, head ? el('p', { class: 'cr-h', text: head }) : '', ...names.map(t => el('p', { class: 'cr-n', text: t })))));
+  }
+  function rollCredits() {
+    lineEl.classList.add('out'); medal.classList.add('pin'); credits.hidden = false; buildCredits();
+    const H = credits.clientHeight, h = roll.scrollHeight, speed = Math.max(70, H * 0.11);          /* pixels a second: a line stays on screen about nine seconds */
+    if (!roll.animate) return end();
+    rollAnim = roll.animate([{ transform: 'translateY(' + H + 'px)' }, { transform: 'translateY(' + (-h) + 'px)' }], { duration: (H + h) / speed * 1000, easing: 'linear', fill: 'forwards' });
+    rollAnim.onfinish = () => { if (on) end(); };
+  }
+  function end() {                                  /* the last card: thank you, and two buttons */
+    clearAll(); box.classList.add('go', 'done'); hy.className = 'gone'; medal.hidden = false; medal.classList.add('fly', 'landed', 'pin'); lineEl.textContent = ''; credits.hidden = true; endEl.hidden = false; skip.hidden = true;
+    Notebook.badge('medal'); const b = $('#fin-back'); if (b) try { b.focus({ preventScroll: true }); } catch (_) {}
+  }
+  function still() {                                /* for visitors who asked for less motion: the same words, the medal and the credits, standing still */
+    box.classList.add('go', 'still'); medal.hidden = false; medal.classList.add('fly', 'landed'); lineEl.textContent = F.lines.join(' '); buildCredits(); credits.hidden = false; endEl.hidden = false; skip.hidden = true; Notebook.badge('medal');
+  }
+  function scene() {
+    box.classList.add('go');                                            /* the black bars slide in: this is a film now */
+    at(0.5, () => { show('appear', 0.3); hy.classList.add('in'); Sfx.whoosh(); });
+    at(1.5, () => caption(F.lines[0]));
+    at(1.9, () => show('speaking'));
+    at(3.3, () => caption(F.lines[1]));
+    at(3.7, () => { show('yes'); medal.hidden = false; medal.classList.add('fly'); Sfx.tick(); });
+    at(5.0, () => { medal.classList.add('landed'); flash(); Sfx.win(); });
+    at(5.7, () => show('speaking'));
+    at(6.3, () => caption(F.lines[2]));
+    at(8.5, () => { show('disappear', 2.0); hy.classList.add('away'); if (LBF.finale3d) LBF.finale3d.depart(); Sfx.whoosh(); });
+    at(9.75, () => { star.classList.add('on'); Sfx.ping(); });
+    at(10.2, rollCredits);
+  }
+  function play() {
+    if (on) return; on = true; clearAll(); resetLook();
+    closeChat(); Missions.stopAll(); Voice.stop();
+    document.body.classList.add('questing', 'finale-on'); box.hidden = false;
+    Music.scene('m-falling'); if (LBF.finale3d) LBF.finale3d.start();
+    try { localStorage.setItem('lbf-finale', '1'); } catch (_) {}
+    if (RM) return still();
+    load().then(() => { if (on) scene(); });
+  }
+  function close() {
+    if (!on) return; on = false; clearAll(); Voice.stop(); Music.scene(null); if (LBF.finale3d) LBF.finale3d.stop();
+    box.hidden = true; document.body.classList.remove('questing', 'finale-on'); resetLook();
+    say(F.bye, true);
+  }
+  /* the sixth quest has just been finished: wait until the child is back on the page and not mid-sentence with Hy, then roll */
+  function queue() {
+    let waited = 0;
+    const iv = setInterval(() => {
+      waited += 0.5; const b = document.body.classList;
+      if (on) return clearInterval(iv);
+      if (b.contains('questing') || b.contains('intro-on') || busy) return;
+      if (waited >= 2.5 && (!chat.classList.contains('open') || waited >= 14)) { clearInterval(iv); play(); }
+    }, 500);
+  }
+  skip.addEventListener('click', end);
+  $('#fin-back').addEventListener('click', close);
+  $('#fin-again').addEventListener('click', () => { on = false; clearAll(); if (LBF.finale3d) LBF.finale3d.stop(); play(); });
+  const open = $('#fin-open'); if (open) open.addEventListener('click', play);
+  document.addEventListener('keydown', e => { if (on && e.key === 'Escape') { if (endEl.hidden) end(); else close(); } });
+  Notebook.whenAll(queue);
+  return { play, close, queue, isOn: () => on };
+})();
+LBF.finale = Finale;
 
 /* ───────────────────────── Quest gate: the page opens one stop at a time ───────────────────────── */
 (function () {
