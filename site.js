@@ -18,8 +18,9 @@ const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const RAD = Math.PI / 180;
 /* small synth sounds shared by every game */
 const Sfx = (function () {
-  let ctx = null;
+  let ctx = null, on = true;
   function tone(f0, f1, dur, vol, type, delay) {
+    if (!on) return;
     try {
       ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
       const t = ctx.currentTime + (delay || 0), o = ctx.createOscillator(), g = ctx.createGain();
@@ -31,7 +32,9 @@ const Sfx = (function () {
   return {
     yes() { tone(660, 660, 0.12, 0.15); tone(990, 990, 0.22, 0.15, 'triangle', 0.11); }, no() { tone(210, 150, 0.3, 0.1, 'square'); },
     win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.22, 0.16, 'triangle', i * 0.11)); },
-    zap() { tone(1800, 300, 0.4, 0.08, 'sawtooth'); }, tick() { tone(520, 520, 0.05, 0.08); }
+    zap() { tone(1800, 300, 0.4, 0.08, 'sawtooth'); }, tick() { tone(520, 520, 0.05, 0.08); },
+    lock() { tone(1200, 1200, 0.04, 0.12, 'square'); tone(1800, 1800, 0.07, 0.1, 'square', 0.05); }, ping() { tone(1320, 1320, 0.5, 0.14, 'sine'); },
+    whoosh() { tone(140, 900, 0.55, 0.07, 'sawtooth'); }, set(v) { on = !!v; }
   };
 })();
 /* background music: a quiet playlist for the whole site, with its own track for the Moon walk */
@@ -393,40 +396,6 @@ LBF.SOURCES.forEach(g => {
   $('#srcgrid').append(el('div', {}, el('h3', { text: g.group }), ul));
 });
 
-/* ───────────────────────── Laser experiment (logic) ───────────────────────── */
-const LIGHT = 299792.458, NEAR = 363300, FAR = 405500;
-const MIRRORS = [['apollo11', 'Apollo 11'], ['apollo14', 'Apollo 14'], ['apollo15', 'Apollo 15'], ['blueghost', 'Blue Ghost']];
-const laser = { t0: 0, total: 0, firing: false, frac: 0 };
-const echo = { round: 0, close: 0, dots: dotsRow(3), msg: $('#echo-msg') };
-$('#echo-dots').append(echo.dots);
-function echoEnd(t) {                                   /* t = when the child pressed Catch, or null if they never did */
-  const diff = t === null ? 9 : t - laser.total, a = Math.abs(diff), good = a < 0.3;
-  laser.firing = false; laser.frac = 0; if (good) echo.close++;
-  echo.dots.children[echo.round].className = good ? 'ok' : 'miss'; echo.round++; answer(good);
-  $('#echo').textContent = laser.total.toFixed(2) + ' s';
-  echo.msg.textContent = t === null ? 'It came back and you missed it!' : a < 0.12 ? 'Bullseye!' : (diff < 0 ? 'Too early by ' : 'Too late by ') + a.toFixed(2) + ' s';
-  const km = Math.round(laser.d).toLocaleString('en-US');
-  $('#dist').textContent = 'There and back in ' + laser.total.toFixed(2) + ' s. The Moon is ' + km + ' km away.';
-  if (echo.round >= 3) {
-    $('#fire').textContent = 'Play again'; Notebook.badge('laser'); Sfx.win();
-    say("Echo received. That's how scientists know the Moon is slipping away from us, 3.8 cm a year.", true);
-  } else $('#fire').textContent = 'Fire again';
-}
-$('#fire').addEventListener('click', () => {
-  if (laser.firing) { echoEnd((performance.now() - laser.t0) / 1000); return; }
-  if (echo.round >= 3) { echo.round = 0; echo.close = 0; $$('span', echo.dots).forEach(d => d.className = ''); }
-  const d = NEAR + (FAR - NEAR) * Math.random();
-  laser.total = 2 * d / LIGHT; laser.d = d; laser.t0 = performance.now(); laser.firing = true; Sfx.zap();
-  echo.msg.textContent = 'Watch the light…'; $('#dist').textContent = ''; $('#fire').textContent = 'Catch the echo!';
-});
-function laserStep(now) {
-  if (!laser.firing) return;
-  const t = (now - laser.t0) / 1000;
-  $('#echo').textContent = t.toFixed(2) + ' s';
-  if (t >= laser.total + 1.2) { echoEnd(null); return; }
-  const f = Math.min(1, t / laser.total); laser.frac = f < .5 ? f * 2 : 2 - f * 2;
-}
-
 /* ───────────────────────── 3D ───────────────────────── */
 let three = false, showModel = function () {};
 try { three = init3D(); } catch (err) { console.warn('3D unavailable:', err); }
@@ -474,10 +443,7 @@ try { three = init3D(); } catch (err) { console.warn('3D unavailable:', err); }
   }
   go.addEventListener('click', () => { order = shuffle(keys).slice(0, N); i = 0; right = 0; go.hidden = true; $$('span', dots).forEach(d => d.className = ''); say('Whose shadow is this?', true); round(); });
 })();
-if (!three) {
-  document.body.classList.add('no3d');
-  (function loop(now) { laserStep(now); requestAnimationFrame(loop); })(performance.now());
-}
+if (!three) document.body.classList.add('no3d');
 
 function init3D() {
   if (!window.THREE) return false;
@@ -492,7 +458,7 @@ function init3D() {
     const t = texLoader.load('assets/' + file, undefined, undefined, () => { if (fallback) fallback(); });
     t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t;
   };
-  const views = [];
+  const views = [], kit = {};                      /* kit: model builders one quest shares with another */
   const ll = (lat, lon, r) => {
     const phi = (lon + 180) * RAD, cl = Math.cos(lat * RAD);
     return new THREE.Vector3(-Math.cos(phi) * cl * r, Math.sin(lat * RAD) * r, Math.sin(phi) * cl * r);
@@ -624,13 +590,14 @@ function init3D() {
     const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), new THREE.MeshBasicMaterial({ color: 0x63f08a }));
     const glow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), new THREE.MeshBasicMaterial({ color: 0x63f08a, transparent: true, opacity: 0.25 }));
     pulse.add(glow); pulse.visible = false; scene.add(line, pulse);
+    let lt = 0;
     views.push({ el: $('#st-laser'), scene, cam, update(dt, asp) {
       const hw = Math.max(5.1, 1.35 * asp), hh = hw / asp;
       cam.left = -hw; cam.right = hw; cam.top = hh; cam.bottom = -hh; cam.position.set(0.25, 0, 10);
       if (!RM) earth.rotation.y += dt * 0.05;
-      pulse.visible = laser.firing;
-      line.material.opacity = laser.firing ? 0.5 : 0.18;
-      if (laser.firing) pulse.position.lerpVectors(a, b, laser.frac);
+      lt = (lt + dt) % 5; const f = lt / 1.28;                   /* a pulse goes out and back at true speed, then rests */
+      pulse.visible = f < 2; line.material.opacity = f < 2 ? 0.5 : 0.18;
+      if (f < 2) pulse.position.lerpVectors(a, b, f < 1 ? f : 2 - f);
     } });
   })();
 
@@ -852,6 +819,7 @@ function init3D() {
       for (let i = 0; i < 7; i++) { const a = i * 0.9, r = 0.25 + (i % 3) * 0.22, bit = mesh(new THREE.BoxGeometry(0.07, 0.03, 0.05), i % 2 ? grey : gold, Math.cos(a) * r, 0.03, Math.sin(a) * r); bit.rotation.set(i, i * 2, i * 3); g.add(bit); }
       return g;
     }
+    kit.lander = lander; kit.buggy = buggy;
     const TARGETS = { apollo15: 'The laser mirror', apollo17: 'The Moon car', surveyor3: 'The robot lander', lcross: 'The crash crater' };
     const sites = C.filter(c => TARGETS[c.id]).map(c => {
       const spot = ({ surveyor5: [6, 29], surveyor3: [-9, -29] })[c.id] || c.plot || [c.lat, c.lon];   /* neighbours nudged apart so the models do not overlap */
@@ -1272,11 +1240,667 @@ function init3D() {
     } });
   })();
 
+  /* ══ Quest 2 begin ══ */
+  /* Quest 2: bring the light home. The child fires a laser from Earth, rides it to the Moon, builds the corner of three
+     mirrors that always sends light back where it came from, then uses the echo time to work out how far away the Moon is.
+     Three places share one scene: the observatory on Earth (gA), Earth and Moon in space at true scale (gS), and the
+     Apollo 15 site on the Moon (gM). Only one is shown at a time. */
+  try { (function () {
+    const box = $('#beam'), stage = $('#beam-stage'), B = LBF.BEAM; if (!box || !stage || !B) return;
+    const tipEl = $('#beam-tip'), actBtn = $('#beam-act'), clockEl = $('#beam-clock'), reticle = $('#beam-reticle'), flashEl = $('#beam-flash'), foundEl = $('#beam-found'),
+      scopeBox = $('#beam-scope'), portEl = $('#beam-port'), pipEl = $('#beam-pip'), ringEl = $('#beam-ring'), homeEl = $('#beam-home'), labelsEl = $('#beam-labels'), listEl = $('#beam-list'), keysEl = $('#beam-keys'), padEl = $('#beam .pad');
+    const DEG = Math.PI / 180, V = (x, y, z) => new THREE.Vector3(x, y, z), UP = V(0, 1, 0);
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), c01 = t => clamp(t, 0, 1), lerp = (a, b, t) => a + (b - a) * t;
+    const ease = t => { t = c01(t); return t * t * (3 - 2 * t); }, easeOut = t => 1 - Math.pow(1 - c01(t), 3);              /* slow in and slow out */
+    const outBack = t => { t = c01(t); return 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2); };          /* overshoot, then settle: follow-through */
+    const lin = hex => new THREE.Color(hex).convertSRGBToLinear();                 /* colours are written as they should look on screen */
+    const M = (color, o) => { o = Object.assign({ roughness: 0.75, metalness: 0.05 }, o || {}); o.color = lin(color); if (o.emissive !== undefined) o.emissive = lin(o.emissive); return new THREE.MeshStandardMaterial(o); };
+    const mesh = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); return m; };
+    const CKM = 299792.458, MOON_KM = 384400, KM = 6371, T1 = MOON_KM / CKM;        /* light speed, Moon distance, Earth radius (km); one-way light time (s) */
+    const km = n => Math.round(n).toLocaleString('en-US') + ' km';
+
+    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(50, 1, 0.2, 6200), scopeCam = new THREE.PerspectiveCamera(30, 1, 0.5, 6200);
+    cam.layers.enable(1);                                                          /* layer 1 = things only the main view shows */
+    const hemi = new THREE.HemisphereLight(0xcfc8ff, 0x30343c, 0.6), sun = new THREE.DirectionalLight(0xffffff, 1.15); scene.add(hemi, sun);
+
+    /* ---------- the sky: a dusk-violet dome and twinkling stars that travel with the camera ---------- */
+    const skyG = new THREE.Group(); scene.add(skyG);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(5500, 40, 24), new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, depthTest: false, uniforms: { up: { value: V(0, 1, 0) }, glow: { value: 1 } },
+      vertexShader: 'varying vec3 d; void main(){ d = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 up; uniform float glow; varying vec3 d; void main(){ float h = dot(normalize(d), up);' +
+        ' vec3 top = vec3(0.03, 0.025, 0.14), mid = vec3(0.11, 0.08, 0.34), low = vec3(0.27, 0.21, 0.6), hz = vec3(0.46, 0.38, 0.8);' +
+        ' vec3 c = mix(mid, top, smoothstep(0.25, 0.95, h)); c = mix(mix(c, low, glow), c, smoothstep(-0.02, 0.34, h)); c = mix(mix(c, hz, glow), c, smoothstep(-0.12, 0.07, h));' +
+        ' c = mix(vec3(0.06, 0.05, 0.2), c, smoothstep(-0.6, -0.12, h)); gl_FragColor = vec4(c, 1.0); }'
+    })); dome.renderOrder = -10; dome.frustumCulled = false; skyG.add(dome);
+    const starTex = spikes => {
+      const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,.9)'); gr.addColorStop(0.45, 'rgba(200,210,255,.25)'); gr.addColorStop(1, 'rgba(200,210,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      if (spikes) { g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(32, 2); g.lineTo(32, 62); g.moveTo(2, 32); g.lineTo(62, 32); g.stroke(); }
+      return new THREE.CanvasTexture(c);
+    };
+    const dotTex = starTex(false), sparkTex = starTex(true);
+    const stars = [[700, 3, 0xffffff, dotTex], [380, 5, 0xcfe0ff, dotTex], [140, 9, 0xffffff, dotTex], [60, 15, 0xfff0d0, sparkTex], [28, 24, 0xdfe8ff, sparkTex]].map(([N, size, color, map], n) => {
+      const a = new Float32Array(N * 3); let sd = 23 + n * 131; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < N; i++) { const u = rnd() * 2 - 1, t = rnd() * 6.2832, q = Math.sqrt(1 - u * u); a[i * 3] = q * Math.cos(t) * 5000; a[i * 3 + 1] = u * 5000; a[i * 3 + 2] = q * Math.sin(t) * 5000; }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3));
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({ color, size, map, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); pts.frustumCulled = false; skyG.add(pts); return pts;
+    });
+
+    /* ---------- shared bits: glowing sprites and laser beams ---------- */
+    const earthTex = tex('earth.jpg');
+    const glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.22, 'rgba(255,255,255,.8)'); gr.addColorStop(0.55, 'rgba(255,255,255,.2)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+    const glow = (color, size, atten) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, sizeAttenuation: !!atten })); s.scale.setScalar(size); return s; };
+    /* A beam is a glowing tube from a to b. Its radius can grow with distance (k), because real laser beams spread out. */
+    const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true); beamGeo.translate(0, 0.5, 0);
+    const beamMat = (color, op) => new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { len: { value: 1 }, r0: { value: 0.03 }, k: { value: 0 }, col: { value: new THREE.Color(color) }, op: { value: op } },
+      vertexShader: 'uniform float len; uniform float r0; uniform float k; void main(){ float r = r0 + k * position.y * len; gl_Position = projectionMatrix * modelViewMatrix * vec4(position.x * r, position.y * len, position.z * r, 1.0); }',
+      fragmentShader: 'uniform vec3 col; uniform float op; void main(){ gl_FragColor = vec4(col * op, 1.0); }' });
+    const bTmp = V();
+    function makeBeam(parent, layer) {
+      const g = new THREE.Group(), glowM = beamMat(0x38e070, 0.5), coreM = beamMat(0xd8ffe4, 0.9);
+      [glowM, coreM].forEach(m => { const o = new THREE.Mesh(beamGeo, m); o.frustumCulled = false; if (layer) o.layers.set(layer); g.add(o); });
+      g.visible = false; parent.add(g);
+      g.put = (a, b, r, k, power) => {
+        bTmp.copy(b).sub(a); const len = bTmp.length(); if (len < 1e-4) { g.visible = false; return; }
+        g.visible = true; g.position.copy(a); g.quaternion.setFromUnitVectors(UP, bTmp.divideScalar(len));
+        glowM.uniforms.len.value = coreM.uniforms.len.value = len; glowM.uniforms.r0.value = r; glowM.uniforms.k.value = k || 0; coreM.uniforms.r0.value = r * 0.4; coreM.uniforms.k.value = (k || 0) * 0.4;
+        const p = power === undefined ? 1 : power; glowM.uniforms.op.value = 0.5 * p; coreM.uniforms.op.value = 0.9 * p;
+      };
+      return g;
+    }
+
+    /* ════════ place A: the observatory on Earth, at night ════════ */
+    const gA = new THREE.Group(); scene.add(gA);
+    const CAM_A = V(0, 1.7, 14), MOON_R = 40, MOON_A = V(0, 1.7 + 300 * Math.sin(25 * DEG), 14 - 300 * Math.cos(25 * DEG));
+    const lookWide = CAM_A.clone().add(V(0, Math.tan(13 * DEG), -1).multiplyScalar(100));
+    (function () {
+      const ground = mesh(new THREE.CircleGeometry(900, 40), M(0x0a0e22, { roughness: 1 })); ground.rotation.x = -Math.PI / 2; gA.add(ground);
+      let sd = 5; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647, hill = new THREE.MeshBasicMaterial({ color: 0x0b0a26 }), tree = new THREE.MeshBasicMaterial({ color: 0x070818 });
+      for (let i = 0; i < 18; i++) {                 /* low hills on the horizon, as dark shapes against the sky: staging */
+        const a = -Math.PI * (0.04 + 0.92 * i / 17), r = 150 + rnd() * 120, s = 16 + rnd() * 26, h = mesh(new THREE.SphereGeometry(1, 16, 10), hill, Math.cos(a) * r, -2, 14 + Math.sin(a) * r);
+        h.scale.set(s * 2.4, s * (0.2 + rnd() * 0.25), s); gA.add(h);
+      }
+      for (let i = 0; i < 26; i++) {                 /* pine trees, so it reads as Earth */
+        const x = -34 + rnd() * 68, z = -40 + rnd() * 36, hgt = 2.6 + rnd() * 3; if (Math.abs(x + 2.2) < 3.4 && z > -6) continue;
+        gA.add(mesh(new THREE.ConeGeometry(0.7 + rnd() * 0.6, hgt, 7), tree, x, hgt / 2, z));
+      }
+    })();
+    const obs = new THREE.Group(); obs.position.set(-2.2, 0, 2); gA.add(obs);
+    const white = M(0xe9eaf2, { roughness: 0.6 }), grey = M(0x8d9096), dark = M(0x24262e), steel = M(0xd0d4de, { metalness: 0.6, roughness: 0.35 });
+    obs.add(mesh(new THREE.CylinderGeometry(1.0, 1.08, 1.3, 24), white, 0, 0.65, 0), mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.1, 24), grey, 0, 1.33, 0), mesh(new THREE.BoxGeometry(0.5, 0.9, 0.06), dark, 0, 0.45, 1.06));
+    const domeG = new THREE.Group(); domeG.position.y = 1.38; obs.add(domeG);                 /* the dome turns so its slit faces where the telescope points */
+    domeG.add(mesh(new THREE.SphereGeometry(1.06, 28, 12, 0.38, Math.PI * 2 - 0.76, 0, Math.PI / 2), M(0xf3f4fa, { roughness: 0.5, side: THREE.DoubleSide })));
+    const tube = new THREE.Group(); tube.position.set(0, 1.55, 0); obs.add(tube);
+    const tubeIn = new THREE.Group(); tube.add(tubeIn);
+    (function () {
+      const t = mesh(new THREE.CylinderGeometry(0.2, 0.24, 1.9, 16), steel, 0, 0, 0.55); t.rotation.x = Math.PI / 2; tubeIn.add(t);
+      tubeIn.add(mesh(new THREE.TorusGeometry(0.2, 0.03, 8, 20), dark, 0, 0, 1.5), mesh(new THREE.CircleGeometry(0.17, 20), new THREE.MeshBasicMaterial({ color: 0x63f08a }), 0, 0, 1.505));
+    })();
+    const lamp = mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff5a4d }), 0, 2.5, 0); obs.add(lamp);
+    const moonA = mesh(new THREE.SphereGeometry(MOON_R, 64, 48), new THREE.MeshBasicMaterial({ map: moonTex, color: 0xf6f3ea })); moonA.position.copy(MOON_A); gA.add(moonA);
+    (function () {                                   /* near side toward us, north up, east on the right: the Moon as seen from the northern half of Earth */
+      const x = CAM_A.clone().sub(MOON_A).normalize(), y = UP.clone().addScaledVector(x, -UP.dot(x)).normalize(), z = new THREE.Vector3().crossVectors(x, y);
+      moonA.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+      const halo = glow(0xcfd6ff, 190, true); halo.material.opacity = 0.35; halo.material.depthTest = true; halo.position.copy(MOON_A).addScaledVector(x, -30); halo.renderOrder = -5; gA.add(halo);
+    })();
+    const A15 = byId.apollo15 || { lat: 26.13, lon: 3.63 };
+    const mark = new THREE.Group();                  /* the Apollo 15 mirror: a ring you can aim at */
+    (function () {
+      const p = ll(A15.lat, A15.lon, MOON_R + 0.3); mark.position.copy(p); mark.quaternion.setFromUnitVectors(V(0, 0, 1), p.clone().normalize());
+      mark.add(mesh(new THREE.RingGeometry(2.3, 3.0, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 })), mesh(new THREE.CircleGeometry(0.85, 20), new THREE.MeshBasicMaterial({ color: 0x63f08a })));
+      moonA.add(mark);
+    })();
+    const dustS = glow(0xd8ffe6, 6, true); dustS.visible = false; gA.add(dustS);
+    const dustR = mesh(new THREE.RingGeometry(0.72, 1, 48), new THREE.MeshBasicMaterial({ color: 0x4dff8a, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide })); dustR.visible = false; gA.add(dustR);
+    const beamA = makeBeam(gA), aimP = MOON_A.clone(), markW = V(), muzzle = V();
+    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), moonSphere = new THREE.Sphere(MOON_A, MOON_R), aimPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(CAM_A.clone().sub(MOON_A).normalize(), MOON_A), hitTmp = V();
+    function aimRay() {                              /* put the aim point where the current ray meets the Moon, or the sky beside it */
+      if (ray.ray.intersectSphere(moonSphere, hitTmp)) { aimP.copy(hitTmp); return true; }
+      if (ray.ray.intersectPlane(aimPlane, hitTmp)) aimP.copy(hitTmp);
+      return false;
+    }
+    function aimAt(x, y) { ndc.set((x - R.left) / R.width * 2 - 1, -((y - R.top) / R.height) * 2 + 1); ray.setFromCamera(ndc, cam); S.onMoon = aimRay(); }
+
+    /* ════════ place S: Earth and Moon in space, at true scale (1 unit = Earth's radius) ════════ */
+    const gS = new THREE.Group(); scene.add(gS);
+    const DM = MOON_KM / KM, MR = 0.2727, X0 = 1, X1 = DM - MR;                   /* the light leaves Earth's surface at X0 and meets the Moon's at X1 */
+    const earthS = mesh(new THREE.SphereGeometry(1, 64, 48), globeMat(earthTex)), moonS = mesh(new THREE.SphereGeometry(MR, 48, 32), globeMat(moonTex), DM, 0, 0);
+    earthS.rotation.y = 2.2; moonS.rotation.y = Math.PI; gS.add(earthS, moonS);
+    earthS.add(mesh(new THREE.SphereGeometry(1.04, 48, 32), new THREE.MeshBasicMaterial({ color: 0x6fb4ff, transparent: true, opacity: 0.28, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false })));
+    const pulse = glow(0x8dffb0, 0.055, false), pulseCore = glow(0xffffff, 0.022, false); gS.add(pulse, pulseCore);
+    const trail = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(X0, 0, 0), V(X0, 0, 0)]), new THREE.LineBasicMaterial({ color: 0x63f08a, transparent: true, opacity: 0.6 })); trail.frustumCulled = false; gS.add(trail);
+    const rings = new THREE.Group();                 /* hoops along the flight path: they rush past and make the speed visible */
+    (function () {
+      const rg = new THREE.TorusGeometry(0.5, 0.006, 6, 48), rm = new THREE.MeshBasicMaterial({ color: 0x7dffa6, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false });
+      for (let x = 2.5; x < X1 - 0.8; x += 1.5) { const r = mesh(rg, rm, x, 0, 0); r.rotation.y = Math.PI / 2; rings.add(r); }
+    })();
+    rings.visible = false; gS.add(rings);
+    const sat = new THREE.Group();                   /* a weather satellite, 36,000 km up: one tenth of the way to the Moon */
+    (function () {
+      const pm = M(0x2f56c8, { metalness: 0.4, roughness: 0.35, emissive: 0x1a2f7a });
+      sat.add(mesh(new THREE.BoxGeometry(0.16, 0.16, 0.22), M(0xe0b04a, { metalness: 0.9, roughness: 0.3, emissive: 0x5a4010 })), mesh(new THREE.BoxGeometry(0.36, 0.012, 0.18), pm, 0.27, 0, 0), mesh(new THREE.BoxGeometry(0.36, 0.012, 0.18), pm, -0.27, 0, 0));
+      const dish = mesh(new THREE.ConeGeometry(0.08, 0.05, 14, 1, true), M(0xffffff, { side: THREE.DoubleSide, emissive: 0x44444a }), 0, -0.12, 0); sat.add(dish);
+      sat.position.set(42164 / KM, 0.1, -0.42); sat.rotation.set(0.4, 0.5, 0.2);
+    })();
+    gS.add(sat);
+
+    /* ════════ place M: the Apollo 15 site on the Moon ════════ */
+    const gM = new THREE.Group(); scene.add(gM);
+    const m0 = V(0.45, 0.62, 0.64).normalize();                                     /* where Earth sits in the Moon's sky, on average */
+    const Xr = V(m0.z, 0, -m0.x).normalize(), Yr = new THREE.Vector3().crossVectors(m0, Xr);   /* the mirror stand's own axes: Xr sideways (the hinge), Yr up and back, m0 toward Earth */
+    const ORG = V(0, 1.35, 0), ED = 900, ER = 70, HOME = 4 * DEG, L = 1.3;          /* hinge point, Earth's distance and size, how close counts as "home", mirror size */
+    const rigBase = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(Xr, Yr, m0));
+    (function () {
+      const map = tex('moonsurf.jpg'), bump = texLoader.load('assets/moonbump.jpg');
+      [map, bump].forEach(t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1120, 1120); t.anisotropy = 8; });
+      const g = mesh(new THREE.PlaneGeometry(16000, 16000), new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: 0.05, roughness: 1, metalness: 0, color: lin(0xe6e6ee) })); g.rotation.x = -Math.PI / 2; gM.add(g);
+      let sd = 9; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647, hm = M(0x8a8a93, { roughness: 1 }), rk = M(0x9a989c, { roughness: 1, flatShading: true }), ico = new THREE.IcosahedronGeometry(1, 0);
+      for (let i = 0; i < 20; i++) {                 /* the mountains around Hadley Rille, far away */
+        const a = rnd() * 6.283, r = 1400 + rnd() * 900, s = 150 + rnd() * 170, h = mesh(new THREE.SphereGeometry(1, 18, 10), hm, Math.cos(a) * r, -10, Math.sin(a) * r); h.scale.set(s * 1.9, s * (0.28 + rnd() * 0.3), s * 1.3); gM.add(h);
+      }
+      for (let i = 0; i < 46; i++) {                 /* loose rocks */
+        const a = rnd() * 6.283, r = 3.2 + rnd() * rnd() * 46, k = 0.06 + rnd() * rnd() * 0.5, s = mesh(ico, rk, Math.cos(a) * r, k * 0.3, Math.sin(a) * r); s.scale.set(k * (0.7 + rnd()), k * (0.5 + rnd() * 0.5), k * (0.7 + rnd())); s.rotation.set(rnd() * 6, rnd() * 6, rnd() * 6); gM.add(s);
+      }
+      if (kit.lander) { const l = kit.lander(true); l.scale.setScalar(7); l.position.set(-15, 0, -22); l.rotation.y = 0.6; gM.add(l); }        /* the lander's bottom half and the Moon car are still parked here */
+      if (kit.buggy) { const b = kit.buggy(); b.scale.multiplyScalar(2.4); b.position.set(10, 0, -13); b.rotation.y = -0.9; gM.add(b); }
+    })();
+    const spotTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+      gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(0.8, 'rgba(255,255,255,.7)'); gr.addColorStop(0.97, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })();
+    const spot = mesh(new THREE.CircleGeometry(1000, 72), new THREE.MeshBasicMaterial({ map: spotTex, color: 0x4fe07a, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }), ORG.x, 0.05, ORG.z);
+    spot.rotation.x = -Math.PI / 2; spot.renderOrder = -1; gM.add(spot);           /* by the time it reaches the Moon the beam is about 2 km wide: this is its footprint */
+    const earthM = mesh(new THREE.SphereGeometry(ER, 64, 48), new THREE.MeshBasicMaterial({ map: earthTex })); gM.add(earthM);
+    const haloM = mesh(new THREE.SphereGeometry(ER * 1.07, 48, 32), new THREE.MeshBasicMaterial({ color: 0x6fb4ff, transparent: true, opacity: 0.28, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false })); earthM.add(haloM);
+    const earthHit = glow(0x8dffb0, 0.1, false); earthHit.visible = false; gM.add(earthHit);
+
+    /* the mirrors. Each one is a square plate; the tracer below treats it as a perfect mirror on both sides. */
+    const cubeRT = new THREE.WebGLCubeRenderTarget(128, { format: THREE.RGBFormat, generateMipmaps: false, minFilter: THREE.LinearFilter }), cubeCam = new THREE.CubeCamera(0.5, 6200, cubeRT);
+    cubeCam.position.copy(ORG); scene.add(cubeCam);
+    const mirrorMat = new THREE.MeshBasicMaterial({ color: 0xcfdcff, envMap: cubeRT.texture, reflectivity: 0.88, combine: THREE.MixOperation }), edgeMat = M(0xf0f2f8, { metalness: 0.6, roughness: 0.35 });
+    const plateGeo = new THREE.BoxGeometry(L, L, 0.035), frameGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(L, L)), frameMat = new THREE.LineBasicMaterial({ color: 0xbfe6ff });
+    const glintMat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: 0.55, map: (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+      g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineCap = 'round'; g.lineWidth = 9; g.beginPath(); g.moveTo(22, 70); g.lineTo(70, 22); g.stroke(); g.lineWidth = 4; g.beginPath(); g.moveTo(40, 84); g.lineTo(84, 40); g.stroke(); return new THREE.CanvasTexture(c); })() });
+    const glintGeo = new THREE.PlaneGeometry(L * 0.94, L * 0.94);      /* the two slanted glints every cartoon mirror has, so these read as mirrors at a glance */
+    const plate = () => { const m = new THREE.Mesh(plateGeo, [edgeMat, edgeMat, edgeMat, edgeMat, mirrorMat, mirrorMat]); m.add(new THREE.LineSegments(frameGeo, frameMat));
+      const g1 = mesh(glintGeo, glintMat, 0, 0, 0.02), g2 = mesh(glintGeo, glintMat, 0, 0, -0.02); g2.rotation.y = Math.PI; m.add(g1, g2); return m; };
+    const rig = new THREE.Group(); gM.add(rig);
+    const pivA = new THREE.Group(), pivB = new THREE.Group(), pivC = new THREE.Group(), pA = plate(), pB = plate(), pC = plate();
+    pA.position.set(0, L / 2, 0); pivA.add(pA); pB.position.set(0, L / 2, 0); pivB.add(pB); pivC.position.set(L / 2, 0, 0); pivB.add(pivC); pC.position.set(L / 2, L / 2, 0); pivC.add(pC); rig.add(pivA, pivB);
+    const hingeB = mesh(new THREE.CylinderGeometry(0.04, 0.04, L + 0.12, 10), steel); hingeB.rotation.z = Math.PI / 2; rig.add(hingeB);
+    const hingeC = mesh(new THREE.CylinderGeometry(0.035, 0.035, L + 0.06, 10), steel, 0, L / 2, 0); pivC.add(hingeC);
+    const standG = new THREE.Group(); standG.position.set(ORG.x, 0, ORG.z); gM.add(standG);            /* a tripod: the hinge sits on top of its post */
+    (function () {
+      standG.add(mesh(new THREE.CylinderGeometry(0.045, 0.065, ORG.y - 0.04, 12), grey, 0, (ORG.y - 0.04) / 2, 0), mesh(new THREE.SphereGeometry(0.085, 14, 10), steel, 0, ORG.y - 0.03, 0));
+      for (let i = 0; i < 3; i++) { const a = i * 2.094 + 0.5, leg = mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.8, 6), grey, Math.cos(a) * 0.27, 0.24, Math.sin(a) * 0.27); leg.rotation.z = -Math.cos(a) * 0.85; leg.rotation.x = Math.sin(a) * 0.85; standG.add(leg);
+        standG.add(mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 10), grey, Math.cos(a) * 0.56, 0.015, Math.sin(a) * 0.56)); }
+    })();
+    /* the real thing: Apollo 15's panel of 300 little glass corners (20 across, 15 down) */
+    const tray = new THREE.Group(); tray.position.copy(ORG); tray.quaternion.copy(rigBase); tray.visible = false; gM.add(tray);
+    (function () {
+      const c = document.createElement('canvas'); c.width = 640; c.height = 400; const g = c.getContext('2d');
+      g.fillStyle = '#d2d5da'; g.fillRect(0, 0, 640, 400); g.strokeStyle = '#8b8f96'; g.lineWidth = 8; g.strokeRect(4, 4, 632, 392);
+      for (let i = 0; i < 20; i++) for (let j = 0; j < 15; j++) {
+        const x = 26 + i * 30.9, y = 24 + j * 25.1;
+        g.fillStyle = '#353841'; g.beginPath(); g.arc(x, y, 10.5, 0, 7); g.fill();
+        g.fillStyle = '#8fa6c9'; g.beginPath(); g.moveTo(x, y); g.arc(x, y, 9, -2.6, -0.5); g.fill();
+        g.strokeStyle = '#c9d6ee'; g.lineWidth = 1.2; g.beginPath(); for (let k = 0; k < 3; k++) { g.moveTo(x, y); g.lineTo(x + Math.cos(k * 2.094 - 1.57) * 9.5, y + Math.sin(k * 2.094 - 1.57) * 9.5); } g.stroke();
+      }
+      const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+      tray.add(mesh(new THREE.BoxGeometry(2.24, 1.42, 0.1), M(0xd8dade, { metalness: 0.5, roughness: 0.4 }), 0, 0, -0.05), mesh(new THREE.PlaneGeometry(2.1, 1.3), new THREE.MeshStandardMaterial({ map: t, metalness: 0.2, roughness: 0.5, emissive: lin(0x30343c) }), 0, 0, 0.004));
+    })();
+    const trayCell = V(-0.9, 0.52, 0.03).applyQuaternion(rigBase).add(ORG);         /* where the big corner shrinks to: one cell of the panel */
+    /* light that travels: the beam into the mirrors (main view only), the hops between mirrors, and the beam out */
+    const bIn = makeBeam(gM, 1), bSeg = [0, 1, 2, 3, 4, 5].map(() => makeBeam(gM)), bOut = makeBeam(gM, 1), bFar = makeBeam(gM);       /* the far part of the beam out is the only part the Earth scope shows */
+    const beads = [0, 1, 2, 3, 4, 5].map(() => { const b = glow(0xf4fff8, 0.2, true); b.visible = false; gM.add(b); return b; }), path = [], lens = [], beadA = V(), beadB = V();    /* beads of light run along the beam to show which way it travels */
+    const hitS = [0, 1, 2, 3, 4, 5, 6].map(() => { const s = glow(0xb8ffd0, 0.3, true); s.visible = false; gM.add(s); return s; });
+    const landS = glow(0x8dffb0, 0.045, false); landS.visible = false; gM.add(landS);
+    const splash = glow(0x8dffb0, 1.1, true); splash.visible = false; gM.add(splash);
+    scopeCam.position.copy(ORG).addScaledVector(m0, -6).addScaledVector(Yr, 2.6); scopeCam.up.copy(Yr); scopeCam.lookAt(scopeCam.position.clone().add(m0));
+
+    /* The tracer: follow one ray of laser light as it bounces off whichever mirrors are in place.
+       Every bounce obeys the mirror law (angle in = angle out). Three mirrors at right angles turn any ray straight back. */
+    const plates = [{ m: pA, on: () => true }, { m: pB, on: () => S.n >= 2 && S.popB > 0.9 }, { m: pC, on: () => S.n >= 3 && S.popC > 0.9 }];
+    const T = { n: 0, err: 9, home: false, pts: [V(), V(), V(), V(), V(), V(), V(), V(), V()], dir: V() };
+    const e1 = V(), e2 = V(), nn = V(), cc = V(), hh = V(), bestN = V();
+    function trace(origin, dir) {
+      T.pts[0].copy(origin); const d = T.dir.copy(dir); let n = 0;
+      for (; n < 7; n++) {
+        let best = Infinity;
+        for (const pl of plates) {
+          if (!pl.on()) continue;
+          pl.m.matrixWorld.extractBasis(e1, e2, nn); cc.setFromMatrixPosition(pl.m.matrixWorld);
+          const half = L / 2 * e1.length(); e1.normalize(); e2.normalize(); nn.normalize();
+          const dn = d.dot(nn); if (Math.abs(dn) < 1e-6) continue;
+          const t = hh.copy(cc).sub(T.pts[n]).dot(nn) / dn; if (t < 1e-4 || t >= best) continue;
+          hh.copy(T.pts[n]).addScaledVector(d, t).sub(cc);
+          if (Math.abs(hh.dot(e1)) <= half && Math.abs(hh.dot(e2)) <= half) { best = t; bestN.copy(nn); }
+        }
+        if (best === Infinity) break;
+        T.pts[n + 1].copy(T.pts[n]).addScaledVector(d, best); d.addScaledVector(bestN, -2 * d.dot(bestN)).normalize();
+      }
+      T.n = n;
+    }
+
+    /* ---------- state, HUD and small helpers ---------- */
+    const S = {}, keys = { left: 0, right: 0, up: 0, down: 0 }, tweens = [], stages = {}, rows = {}, labs = {};
+    let active = false, clock = 0, R = { left: 0, top: 0, width: 1, height: 1 }, ASP = 1.6, labTick = 0, frameN = 0, drag = null, finished = false;
+    const goal = { pos: V(), look: V(), fov: 50, speed: 3 }, look = V(), camUp = V(0, 1, 0), lp = V(), t1 = V(), t2 = V();
+    function camTo(pos, at, fov, speed) { goal.pos.copy(pos); goal.look.copy(at); if (fov) goal.fov = fov; goal.speed = speed || 3; }
+    function camSet(pos, at, fov) { camTo(pos, at, fov); cam.position.copy(pos); look.copy(at); cam.fov = goal.fov; }
+    function tween(key, to, dur, fn, delay) { tweens.push({ key, from: S[key], to, t: 0, dur, fn: fn || ease, delay: delay || 0 }); }
+    function showOnly(g) { gA.visible = g === gA; gS.visible = g === gS; gM.visible = g === gM; scopeBox.hidden = true; reticle.hidden = true; padEl.hidden = true; }
+    function lights(k) {
+      if (k === 'earth') { sun.position.copy(MOON_A).sub(CAM_A); sun.intensity = 0.7; hemi.intensity = 0.55; dome.material.uniforms.glow.value = 1; }
+      else if (k === 'space') { sun.position.set(-20, 30, 60); sun.intensity = 1.25; hemi.intensity = 0.3; dome.material.uniforms.glow.value = 0.3; }
+      else { sun.position.set(-50, 60, 30); sun.intensity = 1.15; hemi.intensity = 0.6; dome.material.uniforms.glow.value = 0.85; }
+    }
+    const tip = t => { if (tipEl.textContent !== t) tipEl.textContent = t; };
+    const hint = t => { keysEl.textContent = t; };
+    const line = k => { if (B.say[k]) say(B.say[k], true); };
+    function act(label, fn) { if (!label) { actBtn.hidden = true; S.act = null; return; } actBtn.textContent = label; actBtn.hidden = false; S.act = fn; }
+    function flash(ms) { flashEl.style.transition = 'none'; flashEl.style.opacity = 0.85; void flashEl.offsetWidth; flashEl.style.transition = 'opacity ' + ms + 'ms ease-out'; flashEl.style.opacity = 0; }
+    function clock2(big, small, ok) { clockEl.hidden = false; clockEl.firstElementChild.textContent = big; clockEl.lastElementChild.textContent = small; clockEl.classList.toggle('ok', !!ok); }
+    function lab(id, text, p, cls) {                 /* a word that floats next to a thing in the 3D scene */
+      let s = labs[id]; if (!s) { s = labs[id] = el('span', { class: 'lab3d' }); labelsEl.append(s); }
+      if (s.textContent !== text) s.textContent = text; s.className = 'lab3d ' + (cls || ''); s._t = labTick;
+      lp.copy(p).project(cam); const ok = lp.z < 1 && Math.abs(lp.x) < 1.05 && Math.abs(lp.y) < 1.05; s.hidden = !ok;
+      if (ok) s.style.transform = 'translate(' + ((lp.x + 1) / 2 * R.width + R.left).toFixed(1) + 'px,' + ((1 - lp.y) / 2 * R.height + R.top).toFixed(1) + 'px)';
+    }
+    const svg = d => '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+    const STEPS = [
+      ['fire', 'Fire the laser', svg('<path d="M3 21h11M5 21v-5a3.5 3.5 0 017 0v5"/><path d="M10 13l9-9" stroke-dasharray="2 2.4"/><circle cx="20" cy="3.5" r="1.8"/>')],
+      ['one', 'One mirror', svg('<path d="M4 19h16"/><path d="M5 5l7 14 7-14" stroke-dasharray="2 2.4"/>')],
+      ['two', 'Two mirrors', svg('<path d="M5 3v16h16"/><path d="M17 3L5 15l4 4L21 7" stroke-dasharray="2 2.4"/>')],
+      ['three', 'Three mirrors', svg('<path d="M12 13V3M12 13l-8 5M12 13l8 5"/><path d="M4 8l8-5 8 5v10l-8 4-8-4z"/>')],
+      ['far', 'How far is the Moon?', svg('<circle cx="5" cy="12" r="3.2"/><circle cx="20" cy="12" r="1.7"/><path d="M9.5 12h8" stroke-dasharray="2 2.4"/>')]
+    ];
+    function buildList() {
+      listEl.replaceChildren();
+      STEPS.forEach(([k, label, icon]) => { const ic = el('span', { class: 'icon' }); ic.innerHTML = icon; const li = el('li', {}, ic, el('span', { text: label }), el('span', { class: 'arrow', text: '' })); rows[k] = li; listEl.append(li); });
+    }
+    const stepNow = k => { for (const id in rows) rows[id].classList.toggle('now', id === k); };
+    const stepDone = k => { rows[k].classList.add('done'); rows[k].classList.remove('now'); rows[k].querySelector('.arrow').textContent = '✓'; };
+    function card(c, fn) {                           /* a short fact to remember, with the key words highlighted */
+      S.paused = true; const p = el('p', { class: 'fact' }); c[1].split('*').forEach((t, n) => p.append(n % 2 ? el('mark', { text: t }) : t));
+      foundEl.replaceChildren(el('h3', { text: c[0] }), p, el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: c[2], onclick: () => { foundEl.hidden = true; S.paused = false; fn && fn(); } })));
+      foundEl.hidden = false;
+    }
+    function quiz(i, misses) {                       /* before the quest ends, Hy checks what stuck */
+      S.paused = true; foundEl.hidden = false;
+      if (i >= B.quiz.length) {
+        foundEl.replaceChildren(el('h3', { text: 'Quest complete!' }), el('p', { class: 'fact', text: 'You brought the light home.' }), el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: 'Go to Stop 3', onclick: finish })));
+        Sfx.win(); say(misses ? 'Case closed. You earned your badge, partner.' : 'A perfect score. You could run this agency, kid.', true); return;
+      }
+      const q = B.quiz[i], note = el('p', { text: (i + 1) + ' of ' + B.quiz.length }), list = el('div', { class: 'opts' });
+      shuffle(q[1].map((t, n) => ({ t, ok: n === 0 }))).forEach(o => list.append(el('button', { text: o.t, onclick: e => {
+        answer(o.ok);
+        if (o.ok) { e.currentTarget.classList.add('yes'); $$('button', list).forEach(b => b.disabled = true); note.textContent = 'Yes!'; setTimeout(() => { if (active) quiz(i + 1, misses); }, 1400); }
+        else { e.currentTarget.classList.add('no'); e.currentTarget.disabled = true; misses++; note.textContent = 'Try again.'; }
+      } })));
+      foundEl.replaceChildren(el('h3', { text: q[0] }), note, list);
+    }
+    function go(name) { const prev = stages[S.name]; if (prev && prev.exit) prev.exit(); S.name = name; S.t = 0; S.ddx = S.ddy = 0; S.released = false; const st = stages[name]; if (st.enter) st.enter(); }
+
+    /* ════════ the story, one stage at a time ════════ */
+    /* 1. On Earth: point the telescope at the Moon … */
+    stages.aim = {
+      enter() { showOnly(gA); lights('earth'); camUp.set(0, 1, 0); camSet(CAM_A, lookWide, ASP < 0.9 ? 64 : 52); S.shot = -1; stepNow('fire'); tip('Tap the Moon.'); hint('Tap the Moon to point the telescope at it.'); act(null); reticle.hidden = true; padEl.hidden = true; clockEl.hidden = true; line('aim'); },
+      update(dt) {
+        goal.fov = ASP < 0.9 ? 64 : 52;
+        if (S.shot < 0) { const a = clock * 0.3; aimP.copy(MOON_A).add(lp.set(Math.cos(a) * 120, 30 + Math.sin(a * 1.3) * 28, 0)); }      /* the telescope scans the sky while it waits */
+        else { S.shot += dt; if (S.shot > 1.1) S.shot = -1; }
+        S.boost = S.shot >= 0 && S.shot < 0.45 ? 1 : 0;
+      },
+      tap(x, y) { aimAt(x, y); if (S.onMoon) go('zoom'); else { S.shot = 0; Sfx.zap(); tip('Nothing out there. Tap the Moon.'); } },
+      space() { go('zoom'); }
+    };
+    /* … then find the mirror through the telescope and fire at it. Hitting bare ground just scatters the light. */
+    const zoomFov = () => Math.max(26, 2 * Math.atan(Math.tan(8.8 * DEG) / ASP) / DEG);
+    const lockTest = () => { mark.getWorldPosition(markW); S.locked = S.onMoon && aimP.distanceTo(markW) < 7; };
+    stages.zoom = {
+      enter() { camTo(CAM_A, MOON_A, zoomFov(), 2.6); aimP.copy(MOON_A).addScaledVector(lp.subVectors(CAM_A, MOON_A).normalize(), MOON_R); S.onMoon = true; S.dust = -1; S.shot = -1; reticle.hidden = false; padEl.hidden = false;
+        tip('Find the mirror. Tap it to fire.'); hint('Tap the glowing ring to fire. Keys: arrows aim, Space fires.'); },
+      update(dt) {
+        goal.fov = zoomFov(); const kx = keys.right - keys.left, ky = keys.up - keys.down;
+        if (kx || ky) { e1.set(1, 0, 0).applyQuaternion(cam.quaternion); e2.set(0, 1, 0).applyQuaternion(cam.quaternion); aimP.addScaledVector(e1, kx * 34 * dt).addScaledVector(e2, ky * 34 * dt);
+          ray.ray.origin.copy(cam.position); ray.ray.direction.copy(aimP).sub(cam.position).normalize(); S.onMoon = aimRay(); }
+        lockTest(); if (S.dust >= 0) { S.dust += dt; if (S.dust > 0.9) S.dust = -1; }
+        S.boost = S.dust >= 0 && S.dust < 0.3 ? 1 : 0;
+      },
+      move(x, y) { aimAt(x, y); },
+      tap(x, y) { aimAt(x, y); lockTest(); this.space(); },
+      space() {
+        if (S.locked) go('fire');
+        else if (S.onMoon) { S.dust = 0; dustS.position.copy(aimP); dustR.position.copy(aimP); dustR.quaternion.setFromUnitVectors(lp.set(0, 0, 1), t1.copy(aimP).sub(MOON_A).normalize()); Sfx.zap(); tip('Just dust. It scatters the light. Tap the ring.'); if (!S.said.dust) { S.said.dust = 1; line('dust'); G.react('no'); } }
+        else tip('Aim at the Moon.');
+      }
+    };
+    stages.fire = {
+      enter() { act(null); reticle.hidden = true; padEl.hidden = true; tip('Fire!'); S.fired = false; aimP.copy(markW); Sfx.zap(); Sfx.whoosh(); },
+      update() {
+        const t = S.t; S.kick = t < 0.12 ? -0.22 * (t / 0.12) : -0.22 * Math.max(0, 1 - (t - 0.12) / 0.35) * Math.cos((t - 0.12) * 16);   /* anticipation: the tube pulls back, then springs forward */
+        S.boost = t > 0.1 ? 1 : 0; if (t > 0.55 && !S.fired) { S.fired = true; flash(650); }
+        if (t > 0.8) { S.kick = 0; S.boost = 0; stepDone('fire'); go('launch'); }
+      }
+    };
+    /* 2. In space, at true scale and true speed: 1.3 seconds from Earth to the Moon. */
+    function wide(cx, half, snap) {                  /* frame Earth and Moon together, clear of the HUD; on tall screens turn the picture so the Moon is at the top */
+      const port = ASP < 0.9, tn = Math.tan(20 * DEG); if (port) { cx += 6; half += 11; } const dist = half / (port ? tn : tn * ASP), lift = port ? 0 : dist * 0.1; camUp.set(port ? 1 : 0, port ? 0 : 1, 0);
+      t1.set(cx, lift, dist); t2.set(cx, lift, 0); (snap ? camSet : camTo)(t1, t2, 40, 2.5);
+    }
+    stages.launch = {
+      enter() { showOnly(gS); lights('space'); wide(DM / 2, DM / 2 + 5, true); S.px = X0; S.trailA = X0; S.trailB = undefined; moonS.position.x = DM; S.hit = false; S.carded = false; pulse.visible = pulseCore.visible = false; rings.visible = false; tip('Real size. Real speed. Watch!'); hint(''); clock2('0.00 s', '0 km'); },
+      update() {
+        wide(DM / 2, DM / 2 + 5); const tt = S.t - 0.9, f = c01(tt / T1); S.px = lerp(X0, X1, f); pulse.visible = pulseCore.visible = tt > 0;      /* light never speeds up or slows down, so no easing here */
+        clock2((f * T1).toFixed(2) + ' s', km(f * MOON_KM));
+        if (tt >= T1 && !S.hit) { S.hit = true; Sfx.ping(); tip('1.3 seconds!'); line('fast'); }
+        if (tt > T1 + 1.7 && !S.carded) { S.carded = true; card(B.cards[0], () => go('ride')); }
+      }
+    };
+    /* The same trip again in slow motion, riding beside the light. */
+    stages.ride = {
+      enter() { showOnly(gS); lights('space'); camUp.set(0, 1, 0); S.camFree = true; rings.visible = true; S.trailA = X0; S.trailB = undefined; moonS.position.x = DM; hint(''); tip('Slow motion. Ride the light!'); act('Skip', () => { flash(400); go('descend'); }); Sfx.whoosh(); },
+      update() {
+        const u = c01(S.t / 7.5), e = ease(u); S.px = lerp(X0, X1, e); pulse.visible = pulseCore.visible = true;
+        const s1 = ease(u / 0.26), s2 = ease((u - 0.1) / 0.3), s3 = ease((u - 0.84) / 0.16);
+        cam.position.set(S.px - lerp(lerp(-1.2, 1.7, s1), 0.6, s3), lerp(lerp(0.9, 0.4, s1), 0.14, s3), lerp(lerp(2.4, 0.85, s1), 0.3, s3));      /* start ahead of the light looking back at Earth, then fall in behind it */
+        look.set(lerp(S.px - 0.6, S.px + 7, s2), 0, 0); if (s3 > 0) look.lerp(moonS.position, s3);
+        cam.fov = lerp(52, 62, Math.sin(u * Math.PI));                                                   /* the view stretches wider at full speed: exaggeration */
+        clock2(km(e * MOON_KM), 'slow motion');
+        tip(u > 0.13 && u < 0.42 ? 'Weather satellites. Only one tenth of the way!' : 'Slow motion. Ride the light!');
+        if (u >= 1) { flash(500); go('descend'); }
+      },
+      exit() { rings.visible = false; S.camFree = false; act(null); clockEl.hidden = true; }
+    };
+    /* 3. On the Moon. The beam has spread to about 2 km wide; only a sliver of it meets the mirror. */
+    const cP = V(-0.49, 0.18, 0.855).normalize(), c3 = m0.clone().multiplyScalar(0.9).addScaledVector(Xr, -0.42).addScaledVector(Yr, 0.1).normalize(), HI = ORG.clone().add(V(-300, 2500, 900));
+    const camDist = () => 5.9 * clamp(1.12 / Math.pow(ASP, 0.55), 1, 1.75);
+    const viewP = () => [ORG.clone().addScaledVector(cP, camDist()), ORG.clone().add(V(0.55, 0.5, 0))];             /* side-on: the bounce is seen like a diagram */
+    const view3 = () => [ORG.clone().addScaledVector(c3, camDist() * 0.95), ORG.clone().add(V(0.15, 0.15, 0))];      /* looking into the finished corner */
+    const hingeW = V(), cornerW = V();
+    function tipOf(kind, a, out) {                   /* where the free edge of a hinged mirror would be at angle a (in the stand's own axes, then in the world) */
+      if (kind === 'A') out.set(0, L * Math.cos(a), L * Math.sin(a));
+      else if (kind === 'B') { const b = Math.PI / 4 + a; out.set(0, L * Math.cos(b), L * Math.sin(b)); }
+      else { const h = Math.PI - a, b = Math.PI / 4 + S.phi, y = L / 2, z = -L * Math.sin(h); out.set(L / 2 + L * Math.cos(h), y * Math.cos(b) - z * Math.sin(b), y * Math.sin(b) + z * Math.cos(b)); }
+      return rig.localToWorld(out);
+    }
+    function turn(kind, a, dt) {                     /* drag a mirror as if you had hold of its edge; arrow keys push it the same way */
+      tipOf(kind, a, t1).project(cam); tipOf(kind, a + DEG, t2).project(cam);
+      const tx = (t2.x - t1.x) * R.width / 2, ty = -(t2.y - t1.y) * R.height / 2, m2 = tx * tx + ty * ty, m = Math.sqrt(m2) || 1;       /* pixels the edge moves per degree */
+      const d = m2 > 0.02 ? clamp((S.ddx * tx + S.ddy * ty) / Math.max(m2, 4.8), -14, 14) : S.ddx * 0.22;       /* never more than about half a degree per pixel, so it does not run away when the edge points at the camera */
+      const ux = tx / m, uy = -ty / m, kd = clamp((Math.abs(ux) > 0.25 ? (keys.right - keys.left) * Math.sign(ux) : 0) + (Math.abs(uy) > 0.25 ? (keys.up - keys.down) * Math.sign(uy) : 0), -1, 1);
+      return a + (d + kd * 38 * dt) * DEG;
+    }
+    stages.descend = {
+      enter() { showOnly(gM); lights('moon'); camUp.set(0, 1, 0); S.camFree = true; clockEl.hidden = true; act('Skip', () => go('m1')); tip('The beam spread out. It is 2 km wide now.'); line('wide'); Sfx.whoosh();
+        Object.assign(S, { n: 1, w: -24 * DEG, phi: 125 * DEG, gam: 162 * DEG, rho: 0, popB: 0, popC: 0, spinA: 0, spinB: 0, rigScale: 1, trayPop: 0, trayMode: false, ampEl: 0, ampAz: 0, ampElGoal: 0, ampAzGoal: 0, wt: 0, homeT: 0 });
+        tweens.length = 0; rig.visible = true; aimL.set(0, L / 2, 0); },
+      update() {
+        const u = easeOut(S.t / 3.6), v = viewP(); cam.position.lerpVectors(HI, v[0], u); look.lerpVectors(ORG, v[1], u); cam.fov = lerp(58, 48, u); spot.material.opacity = lerp(0.42, 0.08, u);
+        if (S.t < 2.5) lab('spot', 'About 2 km wide', ORG, 'big');
+        if (S.t >= 3.6) go('m1');
+      },
+      exit() { S.camFree = false; const v = viewP(); camSet(v[0], v[1], 48); spot.material.opacity = 0.08; act(null); }
+    };
+    /* One flat mirror: you can aim it at Earth … */
+    stages.m1 = {
+      enter() { stepNow('one'); scopeBox.hidden = false; padEl.hidden = false; S.homeT = 0; S.hit = false; hint('Drag the mirror, or use the arrow keys.'); tip('Turn the mirror. Send the light home to Earth.'); hint('Drag the mirror, or use the arrow keys.'); line('m1'); },
+      update(dt) {
+        const v = viewP(); camTo(v[0], v[1], 48); S.w = clamp(turn('A', S.w, dt), -40 * DEG, 32 * DEG); S.homeT = T.home ? S.homeT + dt : 0; if (!drag) lab('grab', '', tipOf('A', S.w, t1), 'grab');
+        if (S.homeT > 0.45) { stepDone('one'); answer(true); go('m1w'); }
+      }
+    };
+    /* … but the Moon wobbles, Earth slides around in its sky, and a flat mirror sends the light the wrong way. */
+    stages.m1w = {
+      enter() { S.ampElGoal = 5.5 * DEG; S.shook = false; tip('Uh-oh. The Moon wobbles, and the light slips off.'); line('wobble'); },
+      update(dt) {
+        S.w = clamp(turn('A', S.w, dt), -40 * DEG, 32 * DEG); if (!drag) lab('grab', '', tipOf('A', S.w, t1), 'grab'); if (S.t > 1.6 && !S.shook) { S.shook = true; G.react('no'); }
+        if (S.t > 4.2 && !S.act) act('Add a mirror', () => go('m2'));
+      }
+    };
+    /* Two mirrors on a hinge: at exactly 90° the light goes back the way it came, however Earth bobs up and down. */
+    stages.m2 = {
+      enter() { act(null); stepNow('two'); S.n = 2; S.phi = 125 * DEG; S.popB = 0; S.lockT = 0; S.phiLock = false; tween('w', 45 * DEG, 0.8); tween('popB', 1, 0.6, outBack, 0.5); Sfx.tick();
+        tip('Swing the new mirror. Find the angle where the light sticks to Earth.'); line('m2'); },
+      update(dt) {
+        const v = viewP(); camTo(v[0], v[1], 48); rig.localToWorld(hingeW.set(-L / 2 - 0.12, 0, 0));
+        if (S.phiLock) { lab('ang', '90°: a square corner!', hingeW, 'ang ok'); if (S.t > S.lockAt + 1.4) go('m2w'); return; }
+        if (S.popB > 0.9) S.phi = clamp(turn('B', S.phi, dt), 52 * DEG, 132 * DEG);
+        const off = Math.abs(S.phi - 90 * DEG); S.lockT = off < 1.6 * DEG ? S.lockT + dt : 0; lab('ang', Math.round(S.phi / DEG) + '°', hingeW, 'ang'); if (!drag && S.popB > 0.9) lab('grab', '', tipOf('B', S.phi, t1), 'grab');
+        if (S.popB > 0.9 && (S.lockT > 0.3 || (S.released && off < 3.5 * DEG))) { S.phiLock = true; S.lockAt = S.t; tween('phi', 90 * DEG, 0.3, outBack); Sfx.lock(); stepDone('two'); answer(true); tip('A square corner! Now the light follows Earth.'); }
+      }
+    };
+    /* … but only up and down. When Earth slides sideways the light slips again. */
+    stages.m2w = {
+      enter() { S.said2 = false; },
+      update() {
+        rig.localToWorld(hingeW.set(-L / 2 - 0.12, 0, 0)); lab('ang', '90°', hingeW, 'ang ok');
+        if (S.t > 2.2 && !S.said2) { S.said2 = true; S.ampAzGoal = 6.5 * DEG; tip('But when Earth slides sideways, the light slips again.'); line('side'); G.react('no'); }
+        if (S.t > 6 && !S.act) act('Add a mirror', () => go('m3'));
+      }
+    };
+    /* Three mirrors, all at 90°: a corner. Now the light comes home whichever way Earth moves. */
+    stages.m3 = {
+      enter() { act(null); stepNow('three'); S.n = 3; S.gam = 162 * DEG; S.popC = 0; S.lockT = 0; S.gamLock = false; tween('rho', 35.264 * DEG, 1.3); tween('popC', 1, 0.6, outBack, 0.9); Sfx.tick();
+        tip('Fold the last mirror up to close the corner.'); line('m3'); },
+      update(dt) {
+        const v = view3(); camTo(v[0], v[1], 48, 1.6); rig.localToWorld(cornerW.set(L / 2 + 0.1, -0.1, 0));
+        if (S.gamLock) { lab('ang', 'Three square corners!', cornerW, 'ang ok'); if (S.t > S.lockAt + 1.3) go('m3w'); return; }
+        if (S.popC > 0.9) S.gam = clamp(turn('C', S.gam, dt), 58 * DEG, 170 * DEG);
+        const off = Math.abs(S.gam - 90 * DEG); S.lockT = off < 2 * DEG ? S.lockT + dt : 0; lab('ang', Math.round(S.gam / DEG) + '°', cornerW, 'ang'); if (!drag && S.popC > 0.9) lab('grab', '', tipOf('C', S.gam, t1), 'grab');
+        if (S.popC > 0.9 && (S.lockT > 0.3 || (S.released && off < 4 * DEG))) { S.gamLock = true; S.lockAt = S.t; tween('gam', 90 * DEG, 0.3, outBack); Sfx.lock(); Sfx.win(); stepDone('three'); answer(true); tip('Three mirrors in a corner. The light always comes home!'); line('corner'); }
+      }
+    };
+    /* Proof by play: spin the finished corner any way you like. It still sends the light home. */
+    stages.m3w = {
+      enter() { hint('Drag to spin the corner. It still sends the light home.'); },
+      update(dt) {
+        const v = view3(); camTo(v[0], v[1], 48, 1.6);
+        S.spinA += S.ddx * 0.2 * DEG + (keys.right - keys.left) * 30 * DEG * dt; S.spinB += S.ddy * 0.2 * DEG + (keys.down - keys.up) * 30 * DEG * dt;
+        const m = Math.hypot(S.spinA, S.spinB), lim = 12 * DEG; if (m > lim) { S.spinA *= lim / m; S.spinB *= lim / m; }
+        if (S.t > 1.2) tip('Spin the corner. It never misses!');
+        if (S.t > 3 && !S.act) act('Next', () => go('reveal'));
+      }
+    };
+    /* The real thing: Apollo 15's panel is 300 little corners like this one. */
+    stages.reveal = {
+      enter() { act(null); padEl.hidden = true; S.carded = false; tip('Apollo 15 left 300 of these corners on the Moon.'); line('array'); tween('spinA', 0, 0.5); tween('spinB', 0, 0.5); tween('rigScale', 0.1, 1.3, ease, 0.4); tween('trayPop', 1, 0.8, outBack, 0.5);
+        S.ampElGoal = 3 * DEG; S.ampAzGoal = 3.5 * DEG; Sfx.whoosh(); },
+      update() {
+        const v = view3(); camTo(v[0].addScaledVector(c3, 1.7), v[1], 48, 1.4);
+        if (S.t > 1.75 && !S.trayMode) { S.trayMode = true; rig.visible = false; Sfx.lock(); }
+        if (S.t > 4.6 && !S.carded) { S.carded = true; card(B.cards[1], () => { flash(500); go('back'); }); }
+      }
+    };
+    /* 4. The echo flies home: another 1.3 seconds, 2.56 in all. */
+    stages.back = {
+      enter() { showOnly(gS); lights('space'); wide(DM / 2, DM / 2 + 5, true); S.px = X1; S.trailA = X1; S.trailB = undefined; moonS.position.x = DM; S.hit = false; pulse.visible = pulseCore.visible = false; padEl.hidden = true; tip('Here comes the echo.'); hint(''); line('echo'); clock2(T1.toFixed(2) + ' s', 'on the way home'); },
+      update() {
+        wide(DM / 2, DM / 2 + 5); const tt = S.t - 1, f = c01(tt / T1); S.px = lerp(X1, X0, f); pulse.visible = pulseCore.visible = tt > 0; clock2((T1 + f * T1).toFixed(2) + ' s', f >= 1 ? 'there and back' : 'and counting…', f >= 1);
+        if (tt >= T1 && !S.hit) { S.hit = true; Sfx.ping(); flash(260); tip('Caught it! 2.56 seconds, there and back.'); }
+        if (tt > T1 + 1.9) go('far');
+      }
+    };
+    /* 5. The puzzle scientists solve: put the Moon where the echo takes exactly that long. */
+    const ECHO = 2 * MOON_KM / CKM;
+    stages.far = {
+      enter() { showOnly(gS); lights('space'); stepNow('far'); S.hit = false; S.km = MOON_KM; S.farDone = false; S.lockT = 0; S.t0 = clock; S.carded = false; tween('km', 250000, 0.9, ease, 0.2); padEl.hidden = false; tip('Slide the Moon until the echo takes 2.56 seconds.'); hint('Drag the Moon nearer or farther, or use the arrow keys.'); line('slide'); },
+      update(dt) {
+        wide(39, 44);
+        if (!S.farDone && S.t > 1.2) {
+          t1.set(S.km / KM, 0, 0).project(cam); t2.set(S.km / KM + 1, 0, 0).project(cam);
+          const tx = (t2.x - t1.x) * R.width / 2, ty = -(t2.y - t1.y) * R.height / 2, m2 = tx * tx + ty * ty || 1, m = Math.sqrt(m2), ux = tx / m, uy = -ty / m;
+          const kd = clamp((Math.abs(ux) > 0.25 ? (keys.right - keys.left) * Math.sign(ux) : 0) + (Math.abs(uy) > 0.25 ? (keys.up - keys.down) * Math.sign(uy) : 0), -1, 1);
+          S.km = clamp(S.km + ((S.ddx * tx + S.ddy * ty) / m2 + kd * 11 * dt) * KM, 200000, 480000);
+          const off = Math.abs(2 * S.km / CKM - ECHO); S.lockT = off < 0.035 ? S.lockT + dt : 0;
+          if (S.lockT > 0.35 || (S.released && off < 0.08)) { S.farDone = true; S.lockAt = S.t; tween('km', MOON_KM, 0.35, outBack); Sfx.lock(); Sfx.win(); stepDone('far'); answer(true); tip('The Moon is 384,400 km away.'); line('measure'); }
+        }
+        moonS.position.x = S.km / KM; const echo = 2 * S.km / CKM, xb = moonS.position.x - MR, ph = ((clock - S.t0) % echo) / echo;
+        S.px = ph < 0.5 ? lerp(X0, xb, ph * 2) : lerp(xb, X0, ph * 2 - 1); pulse.visible = pulseCore.visible = true; S.trailA = X0; S.trailB = xb;       /* the light keeps bouncing there and back: a longer trip means a longer echo */
+        clock2('Echo: ' + echo.toFixed(2) + ' s', S.farDone ? 'The Moon is ' + km(MOON_KM) + ' away' : 'Real echo: ' + ECHO.toFixed(2) + ' s', S.farDone);
+        lab('dist', km(Math.round(S.km / 100) * 100), moonS.position, 'under'); lab('m', 'Moon', moonS.position, S.farDone ? 'pin' : 'handle');
+        if (S.farDone && S.t > S.lockAt + 2 && !S.carded) { S.carded = true; card(B.cards[2], () => quiz(0, 0)); }
+      }
+    };
+
+    /* ---------- what moves every frame in each place ---------- */
+    function updateA(dt) {
+      tube.lookAt(aimP); tubeIn.position.z = S.kick || 0;
+      const want = Math.atan2(aimP.z - obs.position.z, -(aimP.x - obs.position.x)); let dA = want - domeG.rotation.y; dA = Math.atan2(Math.sin(dA), Math.cos(dA)); domeG.rotation.y += dA * Math.min(1, dt * 3);   /* the dome turns a beat behind the telescope: overlapping action */
+      tube.updateMatrixWorld(true); tubeIn.localToWorld(muzzle.set(0, 0, 1.5));
+      beamA.put(muzzle, aimP, S.boost ? 0.1 : 0.022, S.boost ? 0.012 : 0.0035, S.boost ? 1.3 : 0.55);
+      mark.scale.setScalar(S.name === 'fire' ? 1 + Math.sin(c01(S.t / 0.7) * Math.PI) * 1.4 : 1 + Math.sin(clock * 5) * 0.14);
+      lamp.visible = (clock % 1.4) < 0.3;
+      if (S.dust >= 0) { const k = S.dust / 0.9; dustS.visible = dustR.visible = true; dustS.scale.setScalar(8 + k * 10); dustS.material.opacity = 1 - k; dustR.scale.setScalar(1.5 + easeOut(k) * 10); dustR.material.opacity = 0.95 * (1 - k); } else dustS.visible = dustR.visible = false;
+      if (!reticle.hidden) { lp.copy(aimP).project(cam); reticle.style.transform = 'translate(' + ((lp.x + 1) / 2 * R.width + R.left).toFixed(1) + 'px,' + ((1 - lp.y) / 2 * R.height + R.top).toFixed(1) + 'px)'; reticle.classList.toggle('lock', !!S.locked); }
+      if (S.name === 'zoom') { mark.getWorldPosition(markW); lab('mk', 'The mirror', markW, S.locked ? 'ok' : ''); }
+    }
+    function updateS(dt) {
+      earthS.rotation.y += dt * 0.02; sat.rotation.y += dt * 0.3;
+      pulse.position.set(S.px, 0, 0); pulseCore.position.copy(pulse.position); pulse.scale.setScalar((S.hit && S.name !== 'far' ? 0.03 : 0.055) * (1 + Math.sin(clock * 30) * 0.12));
+      const pa = trail.geometry.attributes.position; pa.setXYZ(0, S.trailA, 0, 0); pa.setXYZ(1, S.trailB === undefined ? S.px : S.trailB, 0, 0); pa.needsUpdate = true;
+      if (S.name !== 'ride') { lab('e', 'Earth', earthS.position, 'pin'); if (S.name !== 'far') lab('m', 'Moon', moonS.position, 'pin'); }
+    }
+    const mE = m0.clone(), aimL = V(0, L / 2, 0), Qw = V(), dIn = V(), toE = V(), endP = V(), farP = V(), camRt = V(), qA = new THREE.Quaternion(), qB = new THREE.Quaternion();
+    const Q2 = V(-0.30, 0.318, 0.955), Q3 = V(0.15, -0.318, 0.742), RING = 2 * Math.PI * 46;       /* where the light is aimed inside the two-mirror and three-mirror corners */
+    const fx = [bIn, bOut, bFar, landS, splash, earthHit].concat(bSeg, hitS, beads), NEAR = 110;
+    function poseRig() {
+      rig.quaternion.copy(rigBase); rig.rotateY(S.rho);
+      if (S.spinA || S.spinB) { camRt.set(1, 0, 0).applyQuaternion(cam.quaternion); qA.setFromAxisAngle(UP, S.spinA); qB.setFromAxisAngle(camRt, S.spinB); rig.quaternion.premultiply(qB).premultiply(qA); }
+      pivA.rotation.x = S.w; pivB.rotation.x = Math.PI / 4 + S.phi; pivC.rotation.y = Math.PI - S.gam;
+      pB.visible = hingeB.visible = S.n >= 2; pC.visible = hingeC.visible = S.n >= 3; pB.scale.setScalar(Math.max(0.001, S.popB)); pC.scale.setScalar(Math.max(0.001, S.popC));     /* new mirrors pop in with a little overshoot: squash and stretch */
+      rig.scale.setScalar(S.rigScale); rig.position.lerpVectors(trayCell, ORG, c01((S.rigScale - 0.1) / 0.9)); rig.updateMatrixWorld(true);
+    }
+    function envUpdate() {                           /* refresh what the mirrors reflect: the sky, the ground and Earth */
+      const rv = rig.visible, fv = fx.map(o => o.visible); rig.visible = false; fx.forEach(o => { o.visible = false; }); stars.forEach(p => { p.visible = false; }); spot.visible = false;
+      renderer.autoClear = true; cubeCam.update(renderer, scene); renderer.autoClear = false;
+      rig.visible = rv; fx.forEach((o, i) => { o.visible = fv[i]; }); stars.forEach(p => { p.visible = true; }); spot.visible = true;
+    }
+    function updateM(dt) {
+      /* the Moon wobbles, so from the mirror's point of view Earth slides around in the sky */
+      S.ampEl += (S.ampElGoal - S.ampEl) * Math.min(1, dt * 1.4); S.ampAz += (S.ampAzGoal - S.ampAz) * Math.min(1, dt * 1.4); if (S.ampEl + S.ampAz > 0.002) S.wt += dt;
+      mE.copy(m0).addScaledVector(Xr, S.ampAz * Math.sin(S.wt * 1.12 + 0.6)).addScaledVector(Yr, S.ampEl * Math.sin(S.wt * 1.5)).normalize();
+      earthM.position.copy(ORG).addScaledVector(mE, ED); earthM.rotation.y += dt * 0.03; earthM.visible = S.name !== 'descend';      /* Earth is so far away it only makes sense seen from the ground */
+      poseRig();
+      tray.scale.setScalar(Math.max(0.001, S.trayPop)); tray.visible = S.trayPop > 0.01;
+      if (S.trayMode) { T.n = 1; T.pts[1].copy(ORG).addScaledVector(m0, 0.03); Qw.copy(T.pts[1]); dIn.copy(Qw).sub(earthM.position).normalize(); T.dir.copy(dIn).negate(); }
+      else {
+        if (S.n === 1) aimL.set(0, L / 2 * Math.cos(S.w), L / 2 * Math.sin(S.w)); else aimL.lerp(S.n === 2 ? Q2 : Q3, Math.min(1, dt * 4));
+        rig.localToWorld(Qw.copy(aimL)); dIn.copy(Qw).sub(earthM.position).normalize(); trace(earthM.position, dIn);
+      }
+      farP.copy(Qw).addScaledVector(dIn, -260);
+      if (T.n === 0) {                               /* the light missed every mirror and lands in the dust */
+        endP.copy(Qw).addScaledVector(dIn, (0.03 - Qw.y) / dIn.y); T.err = 9; T.home = false;
+        bIn.put(farP, endP, 0.03, 0, 1); bSeg.forEach(b => { b.visible = false; }); bOut.visible = bFar.visible = false; splash.visible = true; splash.position.copy(endP); landS.visible = earthHit.visible = false;
+      } else {
+        const last = T.pts[T.n]; bIn.put(farP, T.pts[1], 0.03, 0, 1);
+        bSeg.forEach((b, i) => { if (i < T.n - 1) b.put(T.pts[i + 1], T.pts[i + 2], 0.03 * S.rigScale + 0.004, 0, 1); else b.visible = false; });
+        toE.copy(earthM.position).sub(last); const dE = toE.length(); toE.divideScalar(dE); T.err = T.dir.angleTo(toE); T.home = T.err < HOME;
+        let ground = false;
+        if (T.home) endP.copy(last).addScaledVector(T.dir, dE - ER * 0.96);
+        else if (T.dir.y < -0.015) { endP.copy(last).addScaledVector(T.dir, (0.03 - last.y) / T.dir.y); ground = true; }
+        else endP.copy(last).addScaledVector(T.dir, ED);
+        const oLen = last.distanceTo(endP);
+        if (oLen <= NEAR) { bOut.put(last, endP, 0.03, 0.006, 1); bFar.visible = false; }
+        else { t1.copy(last).addScaledVector(T.dir, NEAR); bOut.put(last, t1, 0.03, 0.006, 1); bFar.put(t1, endP, 0.03 + 0.006 * NEAR, 0.006, 1); }
+        splash.visible = ground; if (ground) { splash.position.copy(endP); splash.scale.setScalar(1.1 + Math.sin(clock * 20) * 0.15); }
+        landS.visible = !T.home && !ground; if (landS.visible) landS.position.copy(endP);
+        earthHit.visible = T.home; if (T.home) earthHit.position.copy(endP);
+      }
+      path.length = 0; path.push(beadA.copy(T.n ? T.pts[1] : endP).addScaledVector(dIn, -22)); for (let i = 1; i <= T.n; i++) path.push(T.pts[i]);
+      path.push(T.n ? beadB.copy(T.pts[T.n]).addScaledVector(T.dir, Math.min(24, T.pts[T.n].distanceTo(endP))) : endP);
+      let total = 0; for (let i = 0; i < path.length - 1; i++) { lens[i] = path[i].distanceTo(path[i + 1]); total += lens[i]; }
+      beads.forEach((b, i) => { let d = (clock * 15 + i * total / beads.length) % total, k = 0; while (k < path.length - 2 && d > lens[k]) { d -= lens[k]; k++; } b.visible = true; b.position.lerpVectors(path[k], path[k + 1], lens[k] ? Math.min(1, d / lens[k]) : 0); b.scale.setScalar(0.17 * (0.3 + 0.7 * S.rigScale)); });
+      if (/^m[123]/.test(S.name) && T.n > 1) for (let i = 0; i < T.n; i++) lab('b' + i, String(i + 1), T.pts[i + 1], 'num');
+      hitS.forEach((s, i) => { const on = i < T.n && !S.trayMode; s.visible = on; if (on) { s.position.copy(T.pts[i + 1]); s.scale.setScalar((0.28 + Math.sin(clock * 24 + i * 2) * 0.05) * (0.25 + 0.75 * S.rigScale)); } });
+      haloM.material.color.setHex(T.home ? 0x63f08a : 0x6fb4ff); haloM.material.opacity = T.home ? 0.55 + 0.2 * Math.sin(clock * 9) : 0.28;
+      if (T.home !== S.wasHome) { S.wasHome = T.home; if (T.home && !S.paused) Sfx.tick(); }
+      const close = T.n ? 1 - c01(T.err / (40 * DEG)) : 0; ringEl.style.strokeDashoffset = (RING * (1 - (T.home ? 1 : close * 0.92))).toFixed(1);
+      scopeBox.classList.toggle('home', T.home); homeEl.textContent = T.home ? 'Home!' : 'Earth';
+      e1.setFromMatrixColumn(scopeCam.matrixWorld, 0); e2.setFromMatrixColumn(scopeCam.matrixWorld, 1); const sx = T.dir.dot(e1), sy = T.dir.dot(e2), off = Math.atan2(Math.hypot(sx, sy), T.dir.dot(m0));
+      pipEl.hidden = !(T.n && !T.home && off > 12 * DEG); if (!pipEl.hidden) pipEl.style.transform = 'rotate(' + Math.atan2(sx, sy).toFixed(3) + 'rad)';       /* outside the scope: an arrow on the rim shows which way the light went */
+      if (frameN % 12 === 0) envUpdate();
+    }
+    function tick(dt) {
+      clock += dt; frameN++;
+      if (!S.paused) { S.t += dt; const st = stages[S.name]; if (st && st.update) st.update(dt); }
+      for (let i = tweens.length - 1; i >= 0; i--) {
+        const w = tweens[i]; if (w.delay > 0) { w.delay -= dt; if (w.delay > 0) continue; w.from = S[w.key]; }
+        w.t += dt; S[w.key] = lerp(w.from, w.to, w.fn(w.t / w.dur)); if (w.t >= w.dur) { S[w.key] = w.to; tweens.splice(i, 1); }
+      }
+      if (gA.visible) updateA(dt); if (gS.visible) updateS(dt); if (gM.visible) updateM(dt);
+      if (!S.camFree) { const k = 1 - Math.exp(-dt * goal.speed); cam.position.lerp(goal.pos, k); look.lerp(goal.look, k); cam.fov += (goal.fov - cam.fov) * k; }     /* the camera eases toward where it is going: slow in, slow out */
+      cam.up.copy(camUp); cam.lookAt(look); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+      skyG.position.copy(cam.position); stars.forEach((p, n) => { p.material.opacity = 0.6 + 0.4 * Math.sin(clock * (0.8 + n * 0.55) + n * 2); });
+      for (const k in labs) if (labs[k]._t !== labTick) labs[k].hidden = true; labTick++;
+      S.ddx = S.ddy = 0; S.released = false;
+    }
+
+    /* ---------- input: pointer, keys, on-screen pad ---------- */
+    stage.addEventListener('pointerdown', e => {
+      if (!active || S.paused) return; drag = { x: e.clientX, y: e.clientY, moved: 0 }; try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+      const st = stages[S.name]; if (st && st.move) st.move(e.clientX, e.clientY); e.preventDefault();
+    });
+    stage.addEventListener('pointermove', e => {
+      if (!active || S.paused) return;
+      if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy); S.ddx += dx; S.ddy += dy; }
+      const st = stages[S.name]; if (st && st.move) st.move(e.clientX, e.clientY);
+    });
+    stage.addEventListener('pointerup', e => { if (!drag) return; const d = drag; drag = null; if (!active || S.paused) return; S.released = true; const st = stages[S.name]; if (d.moved < 8 && st && st.tap) st.tap(e.clientX, e.clientY); });
+    stage.addEventListener('pointercancel', () => { drag = null; });
+    stage.addEventListener('contextmenu', e => e.preventDefault());
+    const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
+    addEventListener('keydown', e => {
+      if (!active || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      if (KEYMAP[e.code]) { keys[KEYMAP[e.code]] = 1; e.preventDefault(); return; }
+      if (e.code !== 'Space' || e.target.tagName === 'BUTTON') return;          /* Space on a focused button already presses it */
+      e.preventDefault(); if (S.paused) return;
+      if (S.act) S.act(); else { const st = stages[S.name]; if (st && st.space) st.space(); }
+    });
+    addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = 0; });
+    $$('button', padEl).forEach(b => {
+      const k = b.dataset.k, on = v => e => { e.preventDefault(); keys[k] = v; b.classList.toggle('on', !!v); };
+      b.addEventListener('pointerdown', on(1)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, on(0)));
+    });
+    actBtn.addEventListener('click', () => { actBtn.blur(); if (active && !S.paused && S.act) S.act(); });
+
+    /* ---------- starting, leaving and finishing ---------- */
+    const soundBtn = el('button', { class: 'btn ghost', id: 'beam-sound', text: 'Sound: on', onclick: () => { const v = !Music.isOn(); Music.set(v); Sfx.set(v); soundBtn.textContent = 'Sound: ' + (v ? 'on' : 'off'); } });
+    box.append(soundBtn);
+    function reset() {
+      Object.assign(S, { name: '', t: 0, paused: false, act: null, camFree: false, ddx: 0, ddy: 0, released: false, onMoon: false, locked: false, shot: -1, dust: -1, kick: 0, boost: 0, said: {}, px: X0, trailA: X0, trailB: undefined, km: MOON_KM,
+        n: 1, w: -24 * DEG, phi: 125 * DEG, gam: 162 * DEG, rho: 0, popB: 0, popC: 0, spinA: 0, spinB: 0, rigScale: 1, trayPop: 0, trayMode: false, ampEl: 0, ampAz: 0, ampElGoal: 0, ampAzGoal: 0, wt: 0, homeT: 0, wasHome: false });
+      tweens.length = 0; for (const k in keys) keys[k] = 0; drag = null; foundEl.hidden = true; clockEl.hidden = true; reticle.hidden = true; scopeBox.hidden = true; padEl.hidden = true; actBtn.hidden = true; rig.visible = true; moonS.position.x = DM; buildList();
+    }
+    function start() {
+      reset(); active = true; finished = false; box.hidden = false; document.body.classList.add('questing'); if (Missions.stopAll) Missions.stopAll();
+      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-feelalive'); go('aim');
+    }
+    function stop() { Music.scene(null); Sfx.set(true); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
+    function leave(to) { stop(); setTimeout(() => { const t = $(to); if (t) t.scrollIntoView({ behavior: 'auto', block: 'start' }); }, 80); }
+    function finish() { finished = true; Notebook.badge('laser'); const b = $('#quest2'); if (b) b.textContent = 'Play Quest 2 again'; leave('#mars'); }
+    $('#beam-exit').addEventListener('click', () => leave('#mirrors'));
+    box.append(skipBtn('Skip quest', () => leave('#mars'), 'btn ghost skipq'));
+    const startBtn = $('#quest2'); if (startBtn) startBtn.addEventListener('click', start);
+    let lastNow = performance.now();
+    views.push({ el: stage, scene, cam, quest: true, update(dt, a, rect) {
+      const now = performance.now(), real = Math.min(0.25, (now - lastNow) / 1000); lastNow = now; if (!active) return; R = rect; ASP = a;
+      tick(/^(launch|back|far)$/.test(S.name) ? real : dt);          /* the true-speed shots keep real time even on a slow device */
+    } });
+    views.push({ el: portEl, scene, cam: scopeCam, quest: true, update() {} });
+    LBF.beam = { start, stop, go, S, T, tick, isDone: () => finished, at(p) { if (p === 'tip') tipOf(S.n === 1 ? 'A' : S.n === 2 ? 'B' : 'C', S.n === 1 ? S.w : S.n === 2 ? S.phi : S.gam, lp); else lp.copy(p === 'mark' ? markW : p === 'moon' ? MOON_A : p === 'moonS' ? moonS.position : ORG); lp.project(cam); return [(lp.x + 1) / 2 * R.width + R.left, (1 - lp.y) / 2 * R.height + R.top]; } };
+  })(); } catch (err) { console.warn('Quest 2 is unavailable:', err); }
+  /* ══ Quest 2 end ══ */
+
   /* render loop: one canvas, one viewport per stage */
   let last = performance.now(), W = 0, H = 0;
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    laserStep(now);
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w !== W || h !== H) { W = w; H = h; renderer.setSize(w, h, false); skyCam.aspect = w / h; skyCam.updateProjectionMatrix(); }
     renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H); renderer.clear();
@@ -1703,7 +2327,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat();
 })();
 
 /* every puzzle gets a "Skip puzzle" button that moves on to the next stop */
-$$('.game, #mirrors .panel').forEach(g => {
+$$('.game').forEach(g => {
   const sec = g.closest('section'), nx = sec && sec.querySelector('a.next'), to = nx ? nx.getAttribute('href') : '#sources';
   g.append(skipBtn('Skip puzzle', () => { const t = $(to); if (t) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); }));
 });

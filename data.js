@@ -331,6 +331,9 @@ LBF.SOURCES = [
   { group: "NASA news and history", items: [
     ["JPL: Apollo 11 experiment still going strong after 35 years", "https://www.jpl.nasa.gov/news/apollo-11-experiment-still-going-strong-after-35-years/"],
     ["NASA ILRS: Lunar reflectors", "https://ilrs.gsfc.nasa.gov/missions/satellite_missions/current_missions/ap11_reflector.html"],
+    ["NASA: Laser beams reflected between Earth and Moon (corner mirrors, 2.5-second echo, beam 2 km wide)", "https://www.nasa.gov/missions/laser-beams-reflected-between-earth-and-moon-boost-science"],
+    ["NASA Scientific Visualization Studio: Moon wobble", "https://svs.gsfc.nasa.gov/10836"],
+    ["NASA Earth Observatory: Catalog of Earth satellite orbits (weather satellites, distance to the Moon)", "https://earthobservatory.nasa.gov/features/OrbitsCatalog"],
     ["NASA: Blue Ghost science data received", "https://www.nasa.gov/blogs/missions/2025/03/14/nasa-science-data-received-blue-ghost-captures-eclipse-from-moon"],
     ["NASA Science: Blue Ghost payloads, including the NGLR mirror", "https://science.nasa.gov/lunar-discovery/deliveries/19d-firefly-aerospace"],
     ["NASA: Perseverance sets off-world record for total distance driven", "https://science.nasa.gov/blogs/perseverance-mars-rover/2026/10/12/nasas-perseverance-sets-off-world-record-for-total-distance-driven/"],
@@ -379,7 +382,7 @@ CONTROL LINES
 After your sentences you may add control lines, each on its own line, written exactly like this:
 [[go:ID]] turns the 3D globe to that machine and opens its file. Use it whenever your answer is mainly about one machine in the files. ID is the id in square brackets in the files.
 [[model:KEY]] shows a 3D model the kid can spin. KEY is one of: lm (Apollo lander), viking, mer (Spirit and Opportunity), insight, percy (Perseverance), ingenuity.
-[[do:NAME]] offers an activity. NAME is one of: laser (measure the distance to the Moon), mystery (guess the mystery machine), tour-moon, tour-mars (narrated tours), quiz.
+[[do:NAME]] offers an activity. NAME is one of: laser (the quest about bouncing a laser off the Moon's mirror), mystery (guess the mystery machine), tour-moon, tour-mars (narrated tours), quiz.
 [[next:FIRST QUESTION|SECOND QUESTION]] suggests two short questions the kid could ask next. Always include this line.
 Use at most one go line, one model line and one do line. Never mention these lines or their brackets in your sentences. When you use a go line you can say things like "Follow me" or "Watch the globe".
 
@@ -389,7 +392,7 @@ The page may add a line that starts with ACTIVE MODE.
 - ACTIVE MODE: mystery ID. The kid is playing a guessing game and the secret machine is ID. Answer their question truthfully, starting with Yes or No, plus one short helpful hint. Never say the machine's name, its id, its site name or its exact date. Do not use go, model or do lines. The next line should hold two good yes-or-no questions.
 
 EXTRA FACTS
-- Laser mirrors: Apollo 11, 14 and 15 left retroreflectors (100, 100 and 300 glass prisms). Lasers on Earth time the echo (about 2.5 seconds for the round trip) to measure the distance to about a millimeter. The Moon moves away 3.8 cm per year. Blue Ghost Mission 1 delivered a new NASA mirror (NGLR) in 2025 that has returned laser light. Two Soviet Lunokhod rovers also carry French-built mirrors; this site covers NASA hardware.
+- Laser mirrors: Apollo 11, 14 and 15 left retroreflectors (100, 100 and 300 glass prisms). Lasers on Earth time the echo (about 2.5 seconds for the round trip) to measure the distance to about a millimeter. Each prism is a corner cube: three mirror faces at right angles, which send light straight back toward where it came from, whichever way the Moon wobbles. Light takes about 1.3 seconds each way. The beam leaves Earth a few meters wide and is about 2 km wide when it reaches the Moon, so only a few specks of light make it back. The Moon moves away 3.8 cm per year. Blue Ghost Mission 1 delivered a new NASA mirror (NGLR) in 2025 that has returned laser light. Two Soviet Lunokhod rovers also carry French-built mirrors; this site covers NASA hardware.
 - Overtime: Sojourner planned 7 days, worked 83. Spirit planned 90 days, worked over 6 years. Opportunity planned 90 days, worked over 14 years. Ingenuity planned up to 5 flights, flew 72.
 - Still working in November 2026: Curiosity and Perseverance on Mars; the laser mirrors on the Moon.
 - Each Mars landing also left heat shields, parachutes, airbags or sky cranes. Perseverance left ten sealed sample tubes on the ground as a backup cache.
@@ -401,6 +404,36 @@ ${kb}`;
 };
 
 /* One fact to remember per Moon machine, and a question that checks it. The first answer is the right one. */
+/* Quest 2: bring the light home. cards: [title, fact with *highlights*, button]. quiz: [question, [right answer, wrong, wrong]]. say: Hy's lines. */
+LBF.BEAM = {
+  cards: [
+    ["Light is fast", "Light reached the Moon in *1.3 seconds*.", "Ride it in slow motion"],
+    ["The magic corner", "*Three mirrors* in a *square corner* always send light *back home*.", "Follow the light home"],
+    ["The echo", "The echo takes *2.5 seconds*. That tells us the Moon is *384,400 km* away.", "Hy's questions"]
+  ],
+  quiz: [
+    ["How long does light take to reach the Moon?", ["About 1.3 seconds", "About 1.3 hours", "About 13 days"]],
+    ["How many mirrors make the magic corner?", ["3", "1", "10"]],
+    ["What does the echo time tell scientists?", ["How far away the Moon is", "How hot the Moon is", "How old the Moon is"]]
+  ],
+  say: {
+    aim: "Aim at the mirror on the Moon. Then fire.",
+    dust: "Just dust. It scatters the light. Find the mirror.",
+    fast: "One point three seconds. Light is fast!",
+    wide: "The beam spread out. It is two kilometers wide now.",
+    m1: "Turn the mirror. Send the light home.",
+    wobble: "Uh-oh. The Moon wobbles, and the light slips away.",
+    m2: "Add a second mirror. Find the angle that sticks.",
+    side: "A square corner! But it still slips sideways.",
+    m3: "One more mirror. Fold it up.",
+    corner: "Three mirrors in a corner. The light always comes home!",
+    array: "The astronauts left three hundred of these.",
+    echo: "Here comes the echo.",
+    slide: "Slide the Moon until the echo matches.",
+    measure: "That is how we measure the Moon."
+  }
+};
+
 LBF.LEARN = {
   ranger7:   ["Ranger 7 crashed on purpose, snapping 4,316 photos on the way down.", "Why did Ranger 7 crash?", ["On purpose, to take close-up photos", "It ran out of fuel", "A meteor hit it"]],
   surveyor1: ["Surveyor 1 proved the Moon's ground is solid enough to land on.", "What did Surveyor 1 prove?", ["You can land without sinking", "The Moon has air", "The Moon is hot"]],
