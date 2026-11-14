@@ -2551,7 +2551,7 @@ function init3D() {
         if (f < 0.9) tip('A long trip. Many months.');
         if (f >= 1 && !S.home) { S.home = true; flash(500, 0.7); Sfx.win(); tip('Home! Scientists could open the tubes at last.'); }
         if (S.home && t > 6.3 && !S.said.p_home) { once('p_home'); tip('That is the plan. The real tubes are still on Mars.'); }
-        if (t > 9.4) { stepDone('p'); card(D.cards[0], () => chapter(1)); }
+        if (t > 9.4) { stepDone('p'); keep(1); card(D.cards[0], () => chapter(1)); }
       },
       exit() { tagEl.hidden = true; }
     };
@@ -2664,7 +2664,7 @@ function init3D() {
       exit() { act(null); hint(''); }
     };
     stages.c_trip = tripStage('c_dish', 'c_wait');
-    stages.c_dish = dishStage(() => { tip('Earth heard you: an old lake was here.'); line('c_got'); S.after = () => { stepDone('c'); card(D.cards[1], () => chapter(2)); }; });
+    stages.c_dish = dishStage(() => { tip('Earth heard you: an old lake was here.'); line('c_got'); S.after = () => { stepDone('c'); keep(2); card(D.cards[1], () => chapter(2)); }; });
 
     /* ──────── 3. Ingenuity: spin up in thin air, fly, photograph three things, pass the photos along to Earth ──────── */
     const heliG = new THREE.Group(), chuteG = new THREE.Group(); gT.add(heliG, chuteG); heliG.visible = chuteG.visible = false;
@@ -2852,7 +2852,8 @@ function init3D() {
       tweens.length = 0; for (const k in keys) keys[k] = 0; drag = null; held = 0; foundEl.hidden = true; loadEl.hidden = true; hideAll(); buildList();
     }
     const CHAPS = ['p_load', 'c_load', 'i_load'];
-    function chapter(n) { S.ch = n; try { sessionStorage.setItem('lbf-q3', n); } catch (_) {} for (let i = 0; i < n; i++) stepDone(STEPS[i][0]); go(CHAPS[n]); }
+    function keep(n) { try { sessionStorage.setItem('lbf-q3', n); } catch (_) {} }      /* a finished chapter stays finished, even if the child leaves at its fact card */
+    function chapter(n) { S.ch = n; keep(n); for (let i = 0; i < n; i++) stepDone(STEPS[i][0]); go(CHAPS[n]); }
     function start() {
       reset(); active = true; finished = false; box.hidden = false; document.body.classList.add('questing'); if (Missions.stopAll) Missions.stopAll();
       soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-memories');
