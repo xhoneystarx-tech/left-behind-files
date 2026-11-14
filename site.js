@@ -30,21 +30,34 @@ const guideState = { typing: 0, voice: 0, think: false };
 const Voice = (function () {
   const synth = window.speechSynthesis, ok = !!synth && typeof SpeechSynthesisUtterance !== 'undefined';
   let on = false, voice = null;
+  /* Hy's recorded voice: one clip per fixed line. Anything else falls back to the browser's voice. */
+  const CLIPS = {"Hi, I'm Hy. Press Start and follow me.": "audio/hy-01.mp3", "Keep scrolling. I'll explain as we go.": "audio/hy-02.mp3", "Spin the Moon. Tap any light.": "audio/hy-03.mp3", "Press the big button. Count with me.": "audio/hy-04.mp3", "Mars! Teal lights are still driving.": "audio/hy-05.mp3", "Drag it. Look underneath.": "audio/hy-06.mp3", "Planned for 90 days. Lasted 14 years.": "audio/hy-07.mp3", "My favorite stop. Pick a game, or talk to me.": "audio/hy-08.mp3", "Last stop. Six questions, one badge.": "audio/hy-09.mp3", "This part is for grown-ups.": "audio/hy-10.mp3", "Still on the job. My kind of machine.": "audio/hy-11.mp3", "No batteries, no moving parts, still working. Smartest thing anyone ever left on the Moon.": "audio/hy-12.mp3", "Gone quiet. But the clues it sent home are still paying off.": "audio/hy-13.mp3", "This one went out with a bang, on purpose. Sometimes a crash is the experiment.": "audio/hy-14.mp3", "A cold case. Even the ones that got away taught the engineers something.": "audio/hy-15.mp3", "Voice on. Now I can talk you through the files, partner.": "audio/hy-16.mp3", "Echo received. That's how scientists know the Moon is slipping away from us, 3.8 cm a year.": "audio/hy-17.mp3", "Wrong world, partner. Our machine is on the Moon.": "audio/hy-18.mp3", "Wrong world, partner. Our machine is on Mars.": "audio/hy-19.mp3", "Ask me yes-or-no questions about the mystery machine. I won't say its name.": "audio/hy-20.mp3", "That's the tour. Now go poke around yourself. Every light has a story.": "audio/hy-21.mp3", "Pull up a chair, kid. Ask me about any machine on the Moon or Mars and I'll take you there. Or say the word and we'll play a game.": "audio/hy-22.mp3", "I lost my train of thought. Ask me again?": "audio/hy-23.mp3", "I can only answer yes-or-no questions when my live line is up. Use the clues on the globe, partner.": "audio/hy-24.mp3", "A perfect score. You could run this agency, kid.": "audio/hy-25.mp3", "Case closed. You earned your badge, partner.": "audio/hy-26.mp3"};
+  let playing = null;
   const pick = () => {
     const vs = synth.getVoices().filter(v => /^en/i.test(v.lang));
-    voice = vs.find(v => /Google US English|Samantha|Aria|Jenny|Zira|Daniel/i.test(v.name)) || vs[0] || null;
+    voice = vs.find(v => /Samantha|Aria|Jenny|Zira|Google US English|female/i.test(v.name)) || vs[0] || null;
   };
   if (ok) { try { pick(); synth.addEventListener('voiceschanged', pick); } catch (_) {} }
-  function stop() { if (ok) { try { synth.cancel(); } catch (_) {} } guideState.voice = 0; }
+  function stop() { if (playing) { try { playing.pause(); } catch (_) {} playing = null; } if (ok) { try { synth.cancel(); } catch (_) {} } guideState.voice = 0; }
+  function clip(src) {
+    return new Promise(res => {
+      stop(); const a = new Audio(src); playing = a; let done = false;
+      const end = () => { if (done) return; done = true; if (playing === a) { playing = null; guideState.voice = 0; } res(true); };
+      a.onplaying = () => { guideState.voice = 1; }; a.onended = end; a.onerror = end; a.onpause = end;
+      const p = a.play(); if (p && p.catch) p.catch(end);
+    });
+  }
   /* resolves when the line has been spoken (or at once when the voice is off) */
   function speak(text, opts) {
     return new Promise(res => {
-      if (!ok || !on || !text) return res(false);
+      if (!on || !text) return res(false);
+      if (CLIPS[text] && !(opts && opts.pitch)) return clip(CLIPS[text]).then(res);
+      if (!ok) return res(false);
       try {
         synth.cancel();
         const u = new SpeechSynthesisUtterance(String(text).slice(0, 900));
         if (voice) u.voice = voice;
-        u.lang = 'en-US'; u.pitch = (opts && opts.pitch) || 1.35; u.rate = (opts && opts.rate) || 1.04;
+        u.lang = 'en-US'; u.pitch = (opts && opts.pitch) || 1.2; u.rate = (opts && opts.rate) || 1.0;
         let done = false; const end = () => { if (done) return; done = true; guideState.voice = 0; res(true); };
         u.onstart = () => { guideState.voice = 1; }; u.onend = end; u.onerror = end;
         setTimeout(end, 40000);
@@ -52,7 +65,7 @@ const Voice = (function () {
       } catch (e) { guideState.voice = 0; res(false); }
     });
   }
-  return { ok, isOn: () => on, set(v) { on = !!v && ok; if (!on) stop(); }, speak, stop };
+  return { ok: true, isOn: () => on, set(v) { on = !!v; if (!on) stop(); }, speak, stop, clip };
 })();
 function setVoice(v) {
   Voice.set(v);
@@ -60,7 +73,6 @@ function setVoice(v) {
   $('#bubble-voice').hidden = Voice.isOn() || !Voice.ok;
   if (Voice.isOn()) say("Voice on. Now I can talk you through the files, partner.", true);
 }
-if (!Voice.ok) { $('#sound').hidden = true; $('#bubble-voice').hidden = true; }
 $('#sound').addEventListener('click', () => setVoice(!Voice.isOn()));
 $('#bubble-voice').addEventListener('click', () => setVoice(true));
 
@@ -85,7 +97,7 @@ function say(text, force, opts) {
   if (!text || (sayEl.dataset.full === text && !force)) return Promise.resolve();
   sayEl.dataset.full = text;
   clearInterval(typing); guideState.typing = 0; wake(9000 + text.length * 60);
-  const spoken = Voice.speak(text, opts);
+  const spoken = opts && opts.silent ? Promise.resolve(false) : Voice.speak(text, opts);
   if (RM) { sayEl.textContent = text; return spoken; }
   let i = 0; sayEl.textContent = '';
   guideState.typing = 1;
@@ -244,7 +256,7 @@ function openCase(id, opts = {}) {
   renderFile(c);
   if (globes[c.world]) globes[c.world].focus(id);
   if (opts.reveal) $('#' + c.world).scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' });
-  if (!opts.quiet) say('File ' + c.file + ', ' + c.name + '. ' + QUIPS[c.status], true);
+  if (!opts.quiet) { say(c.name + '. ' + QUIPS[c.status], true, { silent: true }); Voice.speak(QUIPS[c.status]); }
 }
 ['moon', 'mars'].forEach(w => { buildPicker(w); renderFile(byId[selected[w]]); });
 
@@ -920,32 +932,38 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChat();
   let seen = false; try { seen = sessionStorage.getItem('lbf-intro') === '1'; } catch (_) {}
   if (seen || RM || !M.appear) return;
   const LINES = ["Hi! I'm Hy.", "I'm a hydrogen atom. And a detective.", "NASA left robots, cars and mirrors on the Moon and Mars.", "Nobody brought them home.", "Want to help me find them?"];
-  let i = -1, timer = null, over = false;
+  const CUES = [0, 1.6, 4.7, 9.1, 10.75];          /* when each line starts in audio/intro.mp3 */
+  let over = false, audio = null, timers = [];
   box.hidden = false; document.body.classList.add('intro-on'); guide.classList.add('gone');
-  v.src = M.appear; v.play().catch(() => {});
-  v.addEventListener('ended', () => { if (v.src !== M.speaking) { v.src = M.speaking; v.loop = true; v.play().catch(() => {}); } });
-  function next() {
-    if (over) return;
-    i++;
-    if (i >= LINES.length) { $('#intro-go').hidden = false; $('#intro-skip').hidden = true; return; }
-    line.textContent = LINES[i];
-    const spoken = Voice.isOn() ? Voice.speak(LINES[i]).then(() => new Promise(r => setTimeout(r, 500))) : new Promise(r => { timer = setTimeout(r, 1100 + LINES[i].length * 38); });
-    spoken.then(next);
+  v.src = M.speaking; v.loop = true; v.pause();
+  line.textContent = 'Someone wants to meet you.';
+  const go = $('#intro-go'), meet = $('#intro-voice');
+  meet.textContent = 'Meet Hy'; meet.className = 'btn big'; go.hidden = true;
+  function finish() { $('#intro-go').hidden = false; $('#intro-skip').hidden = true; v.pause(); }
+  function run(withSound) {
+    meet.hidden = true;
+    v.src = M.appear; v.loop = false; v.play().catch(() => {});
+    v.onended = () => { v.onended = null; v.src = M.speaking; v.loop = true; v.play().catch(() => {}); };
+    const start = t0 => LINES.forEach((t, i) => timers.push(setTimeout(() => { if (!over) line.textContent = t; }, (CUES[i] + t0) * 1000)));
+    if (withSound) {
+      audio = new Audio('audio/intro.mp3');
+      audio.onended = finish; audio.onerror = () => { timers.push(setTimeout(finish, 12500)); };
+      const p = audio.play(); if (p && p.catch) p.catch(() => { timers.push(setTimeout(finish, 12500)); });
+      start(0);
+    } else { start(0.4); timers.push(setTimeout(finish, 13000)); }
   }
   function done() {
-    if (over) return; over = true; clearTimeout(timer); Voice.stop();
+    if (over) return; over = true; timers.forEach(clearTimeout); if (audio) { try { audio.pause(); } catch (_) {} }
     try { sessionStorage.setItem('lbf-intro', '1'); } catch (_) {}
     box.classList.add('bye'); document.body.classList.remove('intro-on');
     setTimeout(() => { box.hidden = true; v.pause(); }, 550);
     G.back(); say(SAY.top, true);
   }
-  $('#intro-go').addEventListener('click', done);
+  go.addEventListener('click', done);
   $('#intro-skip').addEventListener('click', done);
-  $('#intro-voice').addEventListener('click', e => {
-    Voice.set(true); const b = $('#sound'); b.setAttribute('aria-pressed', Voice.isOn()); b.textContent = Voice.isOn() ? 'Voice on' : 'Voice off';
-    $('#bubble-voice').hidden = true; e.currentTarget.hidden = true;
-    clearTimeout(timer); i = Math.max(-1, i - 1); next();
+  meet.addEventListener('click', () => {
+    Voice.set(true); const b = $('#sound'); b.setAttribute('aria-pressed', 'true'); b.textContent = 'Voice on'; $('#bubble-voice').hidden = true;
+    run(true);
   });
-  setTimeout(next, 1400);
 })();
 })();
