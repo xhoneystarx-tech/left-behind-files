@@ -2533,12 +2533,12 @@ function init3D() {
           if (f >= 1 && !S.caught) {
             const off = wrapPi(orbTh(S.t) - GATE);
             if (Math.abs(off) < tol + 2 * DEG) { S.caught = true; S.tCatch = S.t; rocket.visible = false; flash(300, 0.5); Sfx.lock(); Sfx.yes(); G.react('yes'); tip('Caught! Now the long trip to Earth.'); act(null); }
-            else { S.launch = -1; S.tries++; rocket.visible = false; Sfx.no(); G.react('no'); tip(off > 0 ? 'Too late. The orbiter had passed. Launch sooner.' : 'Too early. The orbiter was not there yet.'); once('p_miss'); }
+            else { S.launch = -1; S.tries++; rocket.visible = false; Sfx.no(); G.react('no'); tip(off > 0 ? 'Too late. The orbiter had passed. Launch sooner.' : 'Too early. The orbiter was not there yet.'); once('p_miss'); act('Launch', () => stages.p_plan.space()); hint('Press Launch when the two rings meet.'); }
           }
         }
         if (S.caught && S.t > S.tCatch + 1.3) go('p_cruise');
       },
-      space() { if (S.launch < 0 && !S.caught) { S.launch = 0; Sfx.rumble(); tip('Lift-off!'); } },
+      space() { if (S.launch < 0 && !S.caught) { S.launch = 0; Sfx.rumble(); tip('Lift-off!'); act(null); hint(''); } },   /* the button steps aside while the rocket flies, and comes back after a miss */
       exit() { act(null); }
     };
     stages.p_cruise = {
