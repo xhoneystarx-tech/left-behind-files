@@ -381,4 +381,27 @@ EXTRA FACTS
 CASE FILES (id in square brackets)
 ${kb}`;
 };
+
+/* One fact to remember per Moon machine, and a question that checks it. The first answer is the right one. */
+LBF.LEARN = {
+  ranger7:   ["Ranger 7 crashed on purpose, snapping 4,316 photos on the way down.", "Why did Ranger 7 crash?", ["On purpose, to take close-up photos", "It ran out of fuel", "A meteor hit it"]],
+  surveyor1: ["Surveyor 1 proved the Moon's ground is solid enough to land on.", "What did Surveyor 1 prove?", ["You can land without sinking", "The Moon has air", "The Moon is hot"]],
+  surveyor3: ["Apollo 12 astronauts walked over to Surveyor 3 and took its camera home.", "Who visited Surveyor 3?", ["Apollo 12 astronauts", "Nobody, ever", "A Mars rover"]],
+  surveyor5: ["Surveyor 5 did the first chemistry test on another world.", "What was Surveyor 5 first to do?", ["Test what Moon soil is made of", "Fly a helicopter", "Drive a car"]],
+  surveyor6: ["Surveyor 6 made the first liftoff from the Moon: a 3-meter hop.", "What did Surveyor 6 do first?", ["Lift off from the Moon", "Dig a tunnel", "Find water"]],
+  surveyor7: ["Surveyor 7 landed in the rough highlands beside Tycho crater.", "Where did Surveyor 7 land?", ["Beside Tycho crater", "At the north pole", "On the far side"]],
+  apollo11:  ["Apollo 11's mirror has 100 prisms and still bounces lasers back to Earth.", "What still works at Apollo 11?", ["The laser mirror", "The TV camera", "The rocket engine"]],
+  apollo12:  ["Apollo 12 landed right next to an old robot: Surveyor 3.", "What did Apollo 12 land next to?", ["Surveyor 3", "Apollo 11", "A frozen lake"]],
+  apollo14:  ["Apollo 14 left a second laser mirror, and two golf balls.", "Which sport was played at Apollo 14?", ["Golf", "Football", "Tennis"]],
+  apollo15:  ["Apollo 15 brought the first Moon car and the biggest mirror: 300 prisms.", "How many prisms are in Apollo 15's mirror?", ["300", "3", "30,000"]],
+  apollo16:  ["Apollo 16 showed the Moon's highlands were shaped by giant impacts.", "What shaped the highlands?", ["Giant impacts", "Rivers", "Wind"]],
+  apollo17:  ["Apollo 17 was the last time people walked on the Moon: 1972.", "When did people last walk on the Moon?", ["1972", "1999", "2020"]],
+  prospector:["Lunar Prospector found hydrogen at the poles: a sign of hidden ice.", "What did Lunar Prospector find?", ["Hydrogen, a sign of ice", "Gold", "Lava"]],
+  lcross:    ["LCROSS crashed a rocket into a dark crater and found water in the dust.", "What did LCROSS find?", ["Water", "Plants", "Oil"]],
+  grail:     ["Twin spacecraft Ebb and Flow mapped the Moon's gravity.", "What did Ebb and Flow map?", ["Gravity", "Weather", "Roads"]],
+  ladee:     ["LADEE studied the Moon's very thin air and its floating dust.", "What did LADEE study?", ["Thin air and dust", "Moonquakes", "The Sun"]],
+  odysseus:  ["Odysseus made the first U.S. Moon landing in more than 50 years.", "What was special about Odysseus?", ["First U.S. landing in over 50 years", "First Moon landing ever", "It carried astronauts"]],
+  blueghost: ["Blue Ghost delivered a brand-new laser mirror in 2025.", "What did Blue Ghost deliver?", ["A new laser mirror", "A Moon car", "Astronauts"]],
+  athena:    ["Athena carried a NASA ice drill, but landed on its side.", "How did Athena end up?", ["On its side", "Back on Earth", "In orbit"]]
+};
 if (typeof module !== 'undefined') module.exports = LBF;

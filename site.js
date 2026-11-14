@@ -665,14 +665,98 @@ function init3D() {
     const spring = (k, c) => ({ x: 0, v: 0, k, c, step(target, dt) { this.v += (-this.k * (this.x - target) - this.c * this.v) * dt; this.x += this.v * dt; return this.x; } });
     const sLean = spring(60, 9), sRoll = spring(70, 10), sAnt = spring(120, 5), sArms = spring(50, 7), sHead = spring(40, 8);
 
+    /* The animation drives a small set of joints. Two bodies can wear it: the simple block figure above
+       (a stand-in while loading) and NASA's own astronaut model, which gets a skeleton fitted to it here. */
+    const SIGN = [1, -1];
+    let body = {
+      hips(y, sx, sy) { hips.position.y = LEG * y; hips.scale.set(sx, sy, sx); }, lift(h) { hips.position.y += h; },
+      chest(x, y, z) { chest.rotation.set(x, y, z); }, head(x, y) { head.rotation.set(x, y, 0); },
+      arm(i, rx, rz, erx) { const a = i ? armR : armL; a.top.rotation.set(rx, 0, SIGN[i] * rz); a.mid.rotation.x = erx; },
+      leg(i, rx, krx) { const l = i ? legR : legL; l.top.rotation.x = rx; l.mid.rotation.x = krx; }
+    };
+    if (THREE.GLTFLoader) new THREE.GLTFLoader().load('assets/astro.glb', g => {
+      try {
+        g.scene.updateMatrixWorld(true);
+        const parts = []; g.scene.traverse(o => { if (o.isMesh) parts.push(o); });
+        const boxAll = new THREE.Box3().setFromObject(g.scene), H = boxAll.max.y - boxAll.min.y, cx = (boxAll.min.x + boxAll.max.x) / 2, cz = (boxAll.min.z + boxAll.max.z) / 2;
+        /* joints, in units of body height, y up, facing +z (the model stands in a T pose) */
+        const B = name => { const b = new THREE.Bone(); b.name = name; return b; };
+        const J = { hips: [0, 0.44, 0], chest: [0, 0.55, 0], head: [0, 0.80, 0], armL: [0.15, 0.735, 0], foreL: [0.30, 0.735, 0], armR: [-0.15, 0.735, 0], foreR: [-0.30, 0.735, 0], legL: [0.09, 0.43, 0], shinL: [0.09, 0.265, 0], legR: [-0.09, 0.43, 0], shinR: [-0.09, 0.265, 0] };
+        const PARENT = { chest: 'hips', head: 'chest', armL: 'chest', foreL: 'swingL', armR: 'chest', foreR: 'swingR', legL: 'hips', shinL: 'legL', legR: 'hips', shinR: 'legR' };
+        const bones = {}; Object.keys(J).forEach(k => bones[k] = B(k));
+        bones.swingL = B('swingL'); bones.swingR = B('swingR'); J.swingL = J.armL; J.swingR = J.armR; PARENT.swingL = 'armL'; PARENT.swingR = 'armR';
+        Object.keys(bones).forEach(k => { const p = PARENT[k], a = J[k], b = p ? J[p] : [0, 0, 0]; bones[k].position.set(a[0] - b[0], a[1] - b[1], a[2] - b[2]); if (p) bones[p].add(bones[k]); });
+        const order = ['hips', 'chest', 'head', 'swingL', 'foreL', 'swingR', 'foreR', 'legL', 'shinL', 'legR', 'shinR', 'armL', 'armR'], idx = {}; order.forEach((k, i) => idx[k] = i);
+
+        const sm = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+        const holder = new THREE.Group(); holder.add(bones.hips); holder.updateMatrixWorld(true);
+        const skeleton = new THREE.Skeleton(order.map(k => bones[k]));          /* bind pose is captured here, in the T pose */
+        holder.scale.setScalar(1.12);
+        const v = new THREE.Vector3();
+        parts.forEach(o => {
+          const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld);
+          const pa = geo.attributes.position, n = pa.count, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+          const visorPart = n < 400;
+          for (let i = 0; i < n; i++) {
+            v.fromBufferAttribute(pa, i); const x = (v.x - cx) / H, y = (v.y - boxAll.min.y) / H, z = (v.z - cz) / H; pa.setXYZ(i, x, y, z);
+            const w = {}, ax = Math.abs(x), side = x >= 0 ? 'L' : 'R';
+            if (visorPart) w.head = 1;
+            else if (z < -0.085 && y > 0.36 && ax < 0.2) w.chest = 1;                         /* life-support backpack rides on the chest */
+            else if (y > 0.62 && y < 0.83 && ax > 0.135) {                                  /* arms: chest → upper arm → forearm */
+              const a = sm(0.135, 0.21, ax), f = sm(0.27, 0.33, ax);
+              w.chest = 1 - a; w['swing' + side] = a * (1 - f); w['fore' + side] = a * f;
+            } else if (y > 0.775 && ax < 0.135) { const h = sm(0.775, 0.825, y); w.head = h; w.chest = 1 - h; }
+            else if (y < 0.47) {                                                             /* legs: hips → thigh → shin */
+              const t = 1 - sm(0.39, 0.47, y), k = 1 - sm(0.235, 0.295, y);
+              w.hips = 1 - t; w['leg' + side] = t * (1 - k); w['shin' + side] = t * k;
+            } else { const c = sm(0.47, 0.6, y); w.chest = c; w.hips = 1 - c; }
+            let j = 0; for (const k in w) if (w[k] > 0.001 && j < 4) { si[i * 4 + j] = idx[k]; sw[i * 4 + j] = w[k]; j++; }
+          }
+          pa.needsUpdate = true; geo.computeVertexNormals();
+          geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+          const mat = o.material.clone(); mat.skinning = true;
+          if (visorPart) { mat.color.set(0xd9a23c); mat.metalness = 1; mat.roughness = 0.18; mat.emissive = new THREE.Color(0x3a2606); }
+          const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; holder.add(m); m.bind(skeleton, new THREE.Matrix4());
+        });
+        /* after binding in the T pose, the arms are lowered to hang at the sides */
+        bones.armL.rotation.z = -1.2; bones.armR.rotation.z = 1.2;
+        rig.add(holder); hips.visible = false;
+        body = {
+          hips(y, sx, sy) { bones.hips.position.y = 0.44 * y; bones.hips.scale.set(sx, sy, sx); }, lift(h) { bones.hips.position.y += h / 1.12; },
+          chest(x, y, z) { bones.chest.rotation.set(x, y, z); }, head(x, y) { bones.head.rotation.set(x, y, 0); },
+          arm(i, rx, rz, erx) { const s = SIGN[i]; bones[i ? 'swingR' : 'swingL'].rotation.set(0, s * rx, s * (rz - 0.16)); bones[i ? 'foreR' : 'foreL'].rotation.set(0, s * erx, 0); },
+          leg(i, rx, krx) { bones[i ? 'legR' : 'legL'].rotation.x = rx; bones[i ? 'shinR' : 'shinL'].rotation.x = krx; }
+        };
+      } catch (err) { console.warn('astronaut model not rigged:', err); }
+    }, undefined, () => {});
+
+    /* rocks to walk between, and bootprints that stay behind you (on the Moon there is no wind to erase them) */
+    (function () {
+      const geo = new THREE.IcosahedronGeometry(1, 0), mat = M(0x8e8e90, { roughness: 1, flatShading: true });
+      let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < 220; i++) {
+        const d = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1).normalize(), k = 0.03 + rnd() * rnd() * 0.16;
+        const r = mesh(geo, mat); r.position.copy(d).multiplyScalar(R + k * 0.3); r.scale.set(k * (0.7 + rnd()), k * (0.5 + rnd() * 0.5), k * (0.7 + rnd())); r.rotation.set(rnd() * 6, rnd() * 6, rnd() * 6); scene.add(r);
+      }
+    })();
+    const prints = [], printGeo = new THREE.CircleGeometry(1, 12), printMat = new THREE.MeshBasicMaterial({ color: 0x2b2b2d, transparent: true, opacity: 0.5 });
+    let printI = 0;
+    function bootprint(sideSign) {
+      let pr = prints[printI % 90]; if (!pr) { pr = new THREE.Mesh(printGeo, printMat); pr.scale.set(0.055, 0.1, 1); scene.add(pr); prints[printI % 90] = pr; }
+      printI++;
+      tmp.copy(pos).multiplyScalar(R + 0.012).addScaledVector(right, sideSign * 0.11); pr.position.copy(tmp);
+      basis.makeBasis(right, headDir, pos); pr.quaternion.setFromRotationMatrix(basis);
+    }
+
     const NEED = [['mirror', 'A mirror still in use'], ['silent', 'One that has gone quiet'], ['impact', 'One that crashed on purpose']];
-    const keys = { up: 0, down: 0, left: 0, right: 0 };
+    const keys = { up: 0, down: 0, left: 0, right: 0, jump: 0 };
     const pos = new THREE.Vector3(), headDir = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), right = new THREE.Vector3(), basis = new THREE.Matrix4();
     let active = false, zoom = 0, clock = 0, got = {}, paused = false, rows = {};
     let speed = 0, turnV = 0, phase = 0, antic = 0, moving = false, cheer = -1, lastStep = 0, idle = 0;
+    let jumpT = -1, jumpY = 0, jumpV = 0, landT = 9, camYaw = 0, camPitch = 0.42, look = null, lookIdle = 9, learned = [];
     function reset() {
       pos.copy(ll(-5, 9, 1)).normalize(); headDir.set(0, 0, -1); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize();
-      zoom = 0; got = {}; paused = false; speed = 0; phase = 0; cheer = -1; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.35; });
+      zoom = 0; got = {}; learned = []; paused = false; speed = 0; phase = 0; cheer = -1; jumpT = -1; jumpY = 0; camYaw = 0; camPitch = 0.42; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.35; });
       const list = $('#walk-list'); list.replaceChildren(); rows = {};
       NEED.forEach(([k, label]) => { const li = el('li', { class: 's-' + k }, el('span', { class: 'arrow', text: '▲' }), el('span', { text: label }), el('span', { class: 'tick', text: '' })); rows[k] = li; list.append(li); });
       $('#walk-found').hidden = true;
@@ -684,16 +768,39 @@ function init3D() {
     }
     function find(s) {
       s.found = true; s.beam.material.opacity = 0.08; Notebook.file(s.c.id); cheer = 0;
-      const k = s.c.status, fresh = rows[k] && !got[k];
-      if (fresh) { got[k] = s.c.id; rows[k].classList.add('done'); rows[k].querySelector('.tick').textContent = s.c.name; }
+      const k = s.c.status, fresh = rows[k] && !got[k], L = LBF.LEARN[s.c.id];
+      if (fresh) { got[k] = s.c.id; learned.push(s.c.id); rows[k].classList.add('done'); rows[k].querySelector('.tick').textContent = s.c.name; }
       say(s.c.name + '. ' + QUIPS[k], true, { silent: true }); Voice.speak(QUIPS[k]);
       const all = NEED.every(([n]) => got[n]);
-      const first = (s.c.story.match(/^.*?[.!?](?=\s|$)/) || [s.c.story])[0];
       setTimeout(() => {
         if (!active) return;
-        if (all) card('Quest complete!', ['You found ' + s.c.name + '. ' + first, 'That is all three. You are a Moon walker.'], 'Go to Stop 2', finish);
-        else card('You found ' + s.c.name, [LBF.STATUS[k].label + '. ' + first, fresh ? 'One down. Keep walking.' : 'You already have one of these. Look for a different color.'], 'Keep walking');
-      }, 1100);
+        const f = $('#walk-found'); paused = true;
+        f.replaceChildren(el('h3', { text: s.c.name }), el('div', { class: 'stamp s-' + k, text: LBF.STATUS[k].label }),
+          el('p', { class: 'fact', text: L ? L[0] : s.c.story }),
+          el('p', { text: fresh ? 'Remember that. Hy will ask you before you leave the Moon.' : 'You already have one of these. Look for a different color.' }),
+          el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: all ? 'I am ready for Hy\'s questions' : 'Got it. Keep walking', onclick: () => { f.hidden = true; paused = false; if (all) debrief(0, 0); } })));
+        f.hidden = false;
+      }, 1250);
+    }
+    /* before leaving, Hy checks what you remember about the three machines you found */
+    function debrief(i, misses) {
+      const f = $('#walk-found'); paused = true; f.hidden = false;
+      if (i >= learned.length) {
+        cheer = 0;
+        f.replaceChildren(el('h3', { text: 'Quest complete!' }), el('p', { text: 'Your field notes from the Moon:' }),
+          el('ul', {}, ...learned.map(id => el('li', { text: LBF.LEARN[id][0] }))),
+          el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: 'Go to Stop 2', onclick: finish })));
+        say(misses ? 'Case closed. You earned your badge, partner.' : 'A perfect score. You could run this agency, kid.', true);
+        return;
+      }
+      const id = learned[i], L = LBF.LEARN[id], opts = L[2].map((t, n) => ({ t, ok: n === 0 })).sort(() => Math.random() - 0.5);
+      const note = el('p', { text: 'Question ' + (i + 1) + ' of ' + learned.length + ' about ' + byId[id].name + '.' });
+      const list = el('div', { class: 'opts' });
+      opts.forEach(o => list.append(el('button', { text: o.t, onclick: e => {
+        if (o.ok) { e.currentTarget.classList.add('yes'); $$('button', list).forEach(b => b.disabled = true); note.textContent = 'Yes! ' + L[0]; setTimeout(() => debrief(i + 1, misses), 1500); }
+        else { e.currentTarget.classList.add('no'); e.currentTarget.disabled = true; misses++; note.textContent = 'Not that one. Think back: ' + L[0].split(/[:,.]/)[0] + '…'; }
+      } })));
+      f.replaceChildren(el('h3', { text: L[1] }), note, list);
     }
     function finish() {
       Notebook.badge('walker'); stop();
@@ -702,11 +809,11 @@ function init3D() {
     }
     function start() {
       reset(); active = true; box.hidden = false; document.body.classList.add('questing'); Missions.stopAll && Missions.stopAll();
-      say('You are the astronaut. Walk to the machines. Find one of each color on the list.', true);
+      say('You are the astronaut. Find one of each kind. Remember what you learn. I will ask.', true);
     }
     function stop() { active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
-    LBF.walk = { start, stop };
-    const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+    LBF.walk = { start, stop, quiz(ids) { learned = ids; debrief(0, 0); } };
+    const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Space: 'jump' };
     addEventListener('keydown', e => { if (!active || !KEYMAP[e.code] || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; keys[KEYMAP[e.code]] = 1; e.preventDefault(); });
     addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = 0; });
     $$('#walk .pad button').forEach(b => {
@@ -718,67 +825,86 @@ function init3D() {
 
     function animate(dt, want, turn) {
       /* 2 anticipation: a quick crouch before setting off; 6 slow in and slow out: speed eases toward the target */
-      if (want > 0 && !moving) { moving = true; antic = 0.22; }
-      if (want <= 0 && speed < 0.05) moving = false;
+      if (want > 0 && !moving) { moving = true; antic = 0.2; }
+      if (want <= 0 && Math.abs(speed) < 0.05) moving = false;
       antic = Math.max(0, antic - dt);
       const target = antic > 0 ? 0 : want;
-      speed += (target - speed) * Math.min(1, dt * (target > speed ? 3.2 : 4.5));
-      const v = Math.abs(speed), dir = speed < 0 ? -1 : 1;
-      /* 9 timing: the low-gravity lope is slow and floaty */
-      phase += dt * (3.1 + 2.2 * v) * (v > 0.03 ? 1 : 0);
-      const s = Math.sin(phase), c = Math.cos(phase), air = Math.abs(s);
-      /* 7 arcs: the body travels in bounding arcs, not a flat line */
-      let hop = air * 0.2 * v, squash = 0;
-      /* 1 squash and stretch: flatten on landing and when crouching, lengthen in flight */
-      squash += (1 - air) * 0.14 * v - air * 0.07 * v;
-      squash += antic > 0 ? Math.sin((1 - antic / 0.22) * Math.PI) * 0.2 : 0;
-      /* 10 exaggeration: a big jump for joy on every find, with its own crouch first */
-      let armsUp = 0;
+      speed += (target - speed) * Math.min(1, dt * (Math.abs(target) > Math.abs(speed) ? 3.0 : 4.2));
+      const v = Math.min(1, Math.abs(speed)), dir = speed < 0 ? -1 : 1, grounded = jumpT < 0;
+      /* 9 timing: a slow, floaty low-gravity lope */
+      if (grounded) phase += dt * (2.9 + 2.3 * v) * (v > 0.03 ? 1 : 0);
+      const s = Math.sin(phase), c = Math.cos(phase), air = Math.pow(Math.abs(s), 0.8);
+      /* 7 arcs: the body bounds along in arcs */
+      let hop = grounded ? air * 0.17 * v : 0;
+      /* 1 squash and stretch: compress on landing and in the crouch, lengthen in flight */
+      let squash = grounded ? (1 - air) * 0.1 * v - air * 0.05 * v : 0;
+      squash += antic > 0 ? Math.sin((1 - antic / 0.2) * Math.PI) * 0.16 : 0;
+      let armsUp = 0, armsOut = 0, tuck = 0;
+      /* the jump: crouch (anticipation), spring off, float under Moon gravity, land with a squash and a dust burst */
+      if (jumpT >= 0) {
+        jumpT += dt;
+        if (jumpT < 0.18) { squash += Math.sin(jumpT / 0.18 * Math.PI * 0.5) * 0.24; tuck = jumpT / 0.18 * 0.5; armsOut = -jumpT / 0.18 * 0.5; }
+        else {
+          if (jumpV === 0 && jumpY === 0) jumpV = 2.6;
+          jumpV -= 2.9 * dt; jumpY += jumpV * dt;
+          squash -= Math.max(0, jumpV) * 0.05; armsOut = 0.9 - Math.abs(jumpV) * 0.12; tuck = Math.max(0, 0.35 - Math.abs(jumpV) * 0.1);
+          if (jumpY <= 0) { jumpY = 0; jumpV = 0; jumpT = -1; landT = 0; for (let i = 0; i < 4; i++) { const pf = puffs[puffI++ % puffs.length]; pf.position.copy(pos).multiplyScalar(R + 0.05).addScaledVector(right, (i % 2 ? 0.2 : -0.2)).addScaledVector(headDir, i < 2 ? 0.15 : -0.15); pf.userData.t = 0; } bootprint(1); bootprint(-1); }
+        }
+        hop += jumpY;
+      }
+      landT += dt; if (landT < 0.3) squash += Math.sin(landT / 0.3 * Math.PI) * 0.22;
+      /* 10 exaggeration: a big jump for joy on every find */
       if (cheer >= 0) {
         cheer += dt; const t = cheer;
-        if (t < 0.25) squash += Math.sin(t / 0.25 * Math.PI * 0.5) * 0.28;
-        else if (t < 0.95) { const u = (t - 0.25) / 0.7; hop += Math.sin(u * Math.PI) * 0.75; squash -= Math.sin(u * Math.PI) * 0.12; squash += (1 - u) * 0.28 * (u < 0.15 ? 1 - u / 0.15 : 0); armsUp = Math.sin(u * Math.PI); }
+        if (t < 0.25) { squash += Math.sin(t / 0.25 * Math.PI * 0.5) * 0.26; tuck = 0.5; }
+        else if (t < 0.95) { const u = (t - 0.25) / 0.7; hop += Math.sin(u * Math.PI) * 0.7; squash -= Math.sin(u * Math.PI) * 0.1; armsUp = Math.sin(u * Math.PI); }
         else if (t < 1.2) squash += Math.sin((t - 0.95) / 0.25 * Math.PI) * 0.2;
         else cheer = -1;
       }
-      hips.position.y = LEG * (1 - squash * 0.9) + hop;
-      hips.scale.set(1 + squash * 0.45, 1 - squash, 1 + squash * 0.45);
-      /* 5 follow through and overlapping action: lean, roll, antenna, arms and head each lag on their own spring */
-      const lean = sLean.step(speed * 0.3 - (antic > 0 ? 0.25 : 0), dt), roll = sRoll.step(-turn * 0.22 * (0.4 + v), dt);
-      chest.rotation.set(lean + air * 0.05 * v, 0, roll);
-      antenna.rotation.set(-sAnt.step(lean * 1.6 + hop * 0.8, dt), 0, -roll * 1.5);
-      const armLag = sArms.step(v, dt), sw = Math.sin(phase - 0.5) * 0.75 * armLag;
-      /* 8 secondary action: arms swing and the head looks into turns while the legs do the main work */
-      armL.top.rotation.set(-sw * dir - armsUp * 2.7, 0, 0.16 + armLag * 0.12 + armsUp * 0.35);
-      armR.top.rotation.set(sw * dir - armsUp * 2.7, 0, -0.16 - armLag * 0.12 - armsUp * 0.35);
-      armL.mid.rotation.x = -0.35 - Math.max(0, -sw) * 0.6 - armsUp * 0.3; armR.mid.rotation.x = -0.35 - Math.max(0, sw) * 0.6 - armsUp * 0.3;
-      head.rotation.set(-lean * 0.5 + (v < 0.05 ? Math.sin(idle * 0.7) * 0.05 : 0), sHead.step(turn * 0.45 + (v < 0.05 ? Math.sin(idle * 0.45) * 0.35 : 0), dt), 0);
-      /* 4 pose to pose: legs blend between a contact pose and a passing pose */
-      const stride = 0.75 * v * dir, tuck = antic > 0 || (cheer >= 0 && cheer < 0.25) ? 0.5 : 0;
-      legL.top.rotation.x = -s * stride - tuck - squash * 1.2; legR.top.rotation.x = s * stride - tuck - squash * 1.2;
-      legL.mid.rotation.x = Math.max(0, c) * 1.0 * v + tuck * 2 + squash * 2.4; legR.mid.rotation.x = Math.max(0, -c) * 1.0 * v + tuck * 2 + squash * 2.4;
-      /* idle breathing so the character is never frozen */
-      if (v < 0.05 && cheer < 0) { idle += dt; chest.scale.setScalar(1 + Math.sin(idle * 1.8) * 0.012); } else idle = 0;
-      shadow.scale.setScalar(1 - Math.min(0.5, hop * 0.8)); shadow.material.opacity = 0.4 - Math.min(0.25, hop * 0.4);
-      /* dust kicks up at each footfall */
+      body.hips(1 - squash * 0.9, 1 + squash * 0.4, 1 - squash * 0.6); body.lift(hop);
+      /* 5 follow through and overlapping action: lean, roll, arms and head each trail on their own spring */
+      const lean = sLean.step(speed * 0.26 - (antic > 0 ? 0.2 : 0) + (jumpT >= 0.18 ? 0.12 : 0), dt), roll = sRoll.step(-turn * 0.2 * (0.4 + v), dt);
+      const twist = grounded ? -s * 0.2 * v * dir : 0;
+      body.chest(lean + air * 0.04 * v, twist, roll);
+      const armLag = sArms.step(v, dt), sw = Math.sin(phase - 0.55) * 0.7 * armLag * (grounded ? 1 : 0.2);
+      /* 8 secondary action: arms swing against the legs, elbows flex, the head looks into turns and stays level */
+      const up = -armsUp * 2.75, out = 0.16 + armLag * 0.1 + armsUp * 0.4 + Math.max(0, armsOut) * 0.9;
+      body.arm(0, -sw * dir + up + Math.min(0, armsOut), out, -0.3 - Math.max(0, -sw) * 0.7 - armLag * 0.25 - armsUp * 0.3);
+      body.arm(1, sw * dir + up + Math.min(0, armsOut), out, -0.3 - Math.max(0, sw) * 0.7 - armLag * 0.25 - armsUp * 0.3);
+      body.head(-lean * 0.6 + (v < 0.05 && grounded ? Math.sin(idle * 0.7) * 0.05 : 0), sHead.step(turn * 0.5 - twist * 0.8 + (v < 0.05 && grounded ? Math.sin(idle * 0.45) * 0.4 : 0), dt));
+      /* 4 pose to pose: each leg blends through contact, push-off, passing and reach */
+      const stride = 0.62 * v * dir, kn = grounded ? 0.95 * v : 0, crouch = squash * 1.5 + tuck;
+      body.leg(0, -s * stride - crouch, Math.max(0, Math.sin(phase + 0.8)) * kn + crouch * 2);
+      body.leg(1, s * stride - crouch, Math.max(0, Math.sin(phase + 0.8 + Math.PI)) * kn + crouch * 2);
+      if (v < 0.05 && cheer < 0 && grounded) idle += dt; else idle = 0;
+      shadow.scale.setScalar(1 - Math.min(0.55, hop * 0.5)); shadow.material.opacity = 0.4 - Math.min(0.28, hop * 0.3);
+      /* dust and a bootprint at each footfall */
       const step = Math.floor(phase / Math.PI);
-      if (step !== lastStep && v > 0.3) { lastStep = step; const pf = puffs[puffI++ % puffs.length]; pf.position.copy(pos).multiplyScalar(R + 0.05).addScaledVector(right, (step % 2 ? 0.1 : -0.1)); pf.userData.t = 0; }
-      puffs.forEach(pf => { const t = pf.userData.t += dt; if (t < 0.7) { pf.material.opacity = 0.5 * (1 - t / 0.7); pf.scale.setScalar(1 + t * 5); } else pf.material.opacity = 0; });
+      if (step !== lastStep && v > 0.25 && grounded) { lastStep = step; const sd = step % 2 ? 1 : -1; bootprint(sd); const pf = puffs[puffI++ % puffs.length]; pf.position.copy(pos).multiplyScalar(R + 0.05).addScaledVector(right, sd * 0.1); pf.userData.t = 0; }
+      puffs.forEach(pf => { const t = pf.userData.t += dt; if (t < 0.8) { pf.material.opacity = 0.45 * (1 - t / 0.8); pf.scale.setScalar(1 + t * 5); } else pf.material.opacity = 0; });
     }
+
+    /* look around: hold the right mouse button (or drag with a finger) to orbit the camera a full 360° */
+    stage.addEventListener('contextmenu', e => e.preventDefault());
+    stage.addEventListener('pointerdown', e => { look = { x: e.clientX, y: e.clientY }; lookIdle = 0; stage.style.cursor = 'grabbing'; try { stage.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault(); });
+    stage.addEventListener('pointermove', e => { if (!look) return; camYaw -= (e.clientX - look.x) * 0.007; camPitch = Math.max(-0.05, Math.min(1.25, camPitch + (e.clientY - look.y) * 0.005)); look.x = e.clientX; look.y = e.clientY; lookIdle = 0; });
+    const lookEnd = () => { look = null; stage.style.cursor = ''; };
+    stage.addEventListener('pointerup', lookEnd); stage.addEventListener('pointercancel', lookEnd);
 
     views.push({ el: stage, scene, cam, quest: true, update(dt) {
       if (!active) return;
       clock += dt; zoom = Math.min(1, zoom + dt / 2.6);
       const can = !paused && zoom >= 1 && cheer < 0;
       const want = can ? keys.up - keys.down * 0.5 : 0, turn = can ? keys.left - keys.right : 0;
+      if (can && keys.jump && jumpT < 0 && landT > 0.25) { jumpT = 0; jumpY = 0; jumpV = 0; }
       turnV += (turn - turnV) * Math.min(1, dt * 6);
       animate(dt, want, turnV);
       if (Math.abs(turnV) > 0.01) headDir.applyAxisAngle(pos, turnV * 1.9 * dt);
       if (Math.abs(speed) > 0.01) pos.addScaledVector(headDir, speed * 2.7 * dt / R).normalize();
       headDir.addScaledVector(pos, -headDir.dot(pos)).normalize();
       right.crossVectors(pos, headDir).normalize();
-      if (can) for (const s of sites) if (!s.found && pos.dot(s.dir) > 0.9955) { find(s); break; }
-      /* 11 solid drawing: the rig stands on the ground with its own up, right and forward */
+      if (can && jumpT < 0) for (const s of sites) if (!s.found && pos.dot(s.dir) > 0.9955) { find(s); break; }
+      /* 11 solid drawing: the figure stands on the ground with its own up, right and forward */
       basis.makeBasis(right, pos, headDir); rig.quaternion.setFromRotationMatrix(basis); rig.position.copy(pos).multiplyScalar(R);
       NEED.forEach(([k]) => {
         if (got[k]) return; let best = null, bd = -2;
@@ -786,12 +912,16 @@ function init3D() {
         if (best) { tmp.copy(best.dir).addScaledVector(pos, -best.dir.dot(pos)); rows[k].querySelector('.arrow').style.transform = 'rotate(' + Math.atan2(-tmp.dot(right), tmp.dot(headDir)) + 'rad)'; }
       });
       sites.forEach(s => { s.ring.scale.setScalar(1 + Math.sin(clock * 3 + s.dir.x * 9) * 0.06); });
-      /* 3 staging: fly in from above, then hold the astronaut in clear silhouette against the black sky */
-      const e = ease(zoom);
-      tmp.copy(pos).multiplyScalar(R + 1.55).addScaledVector(headDir, -3.1).addScaledVector(right, 0.5);
+      /* 3 staging: fly in from above, then hold the astronaut in clear silhouette against the black sky.
+         The camera orbits wherever the player drags it and drifts back behind them once they walk on. */
+      lookIdle += dt;
+      if (!look && lookIdle > 1.2 && Math.abs(speed) > 0.2) { camYaw += (Math.atan2(Math.sin(-camYaw), Math.cos(-camYaw))) * Math.min(1, dt * 1.6); camPitch += (0.42 - camPitch) * Math.min(1, dt * 1.2); }
+      const e = ease(zoom), dist = 3.5;
+      tmp2.copy(headDir).multiplyScalar(-1).applyAxisAngle(pos, camYaw);                 /* direction from astronaut to camera, on the ground */
+      tmp.copy(pos).multiplyScalar(R + 1.0 + Math.sin(camPitch) * dist).addScaledVector(tmp2, Math.cos(camPitch) * dist);
       tmp2.copy(pos).multiplyScalar(R + 60);
       cam.position.lerpVectors(tmp2, tmp, e); cam.up.copy(zoom < 1 ? headDir : pos);
-      tmp.copy(pos).multiplyScalar(R + 0.95).addScaledVector(headDir, 1.6 * e); cam.lookAt(tmp);
+      tmp.copy(pos).multiplyScalar(R + 0.95); cam.lookAt(tmp);
     } });
   })();
 

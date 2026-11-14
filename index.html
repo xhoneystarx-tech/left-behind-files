@@ -251,11 +251,19 @@ body.questing main, body.questing .bar, body.questing footer{visibility:hidden}
 #walk .pad [data-k=left]{grid-column:1;grid-row:2}
 #walk .pad [data-k=down]{grid-column:2;grid-row:2}
 #walk .pad [data-k=right]{grid-column:3;grid-row:2}
+#walk .pad [data-k=jump]{grid-column:3;grid-row:1;font-size:13px;font-weight:700}
 #walk .keys{position:absolute;left:214px;bottom:22px;font-size:var(--s-1);color:var(--smoke)}
 #walk-exit{position:absolute;right:16px;top:16px;padding:7px 14px;font-size:var(--s-1)}
 #walk .found{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--paper);color:var(--ink);padding:22px 24px;width:min(420px,calc(100vw - 32px));display:grid;gap:12px;box-shadow:0 20px 70px rgba(0,0,0,.85)}
 #walk .found[hidden]{display:none}
 #walk .found h3{font-size:var(--s3)}
+#walk .found .fact{font-family:var(--display);font-size:var(--s1);line-height:1.35;border-left:4px solid #ff9a3d;padding-left:12px}
+#walk .found .opts{display:grid;gap:8px}
+#walk .found .opts button{text-align:left;background:none;border:2px solid var(--ink);border-radius:4px;padding:10px 14px;font-weight:700;color:var(--ink)}
+#walk .found .opts button.no{border-color:#b3271c;color:#b3271c;text-decoration:line-through}
+#walk .found .opts button.yes{background:#0f6d3a;border-color:#0f6d3a;color:#fff}
+#walk .found ul{margin:0;padding-left:18px;display:grid;gap:6px}
+#walk-stage{cursor:grab}
 @media (max-width:760px){#walk .keys{display:none}}
 
 /* missions */
@@ -625,7 +633,7 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
   <div id="walk-stage" aria-label="You are on the Moon. Walk to the light beams."></div>
   <div class="hud">
     <strong>Quest 1: Moon walk</strong>
-    <span>Find one of each. Follow the arrows.</span>
+    <span>Find one of each. Remember what you learn: Hy will ask.</span>
     <ul id="walk-list"></ul>
   </div>
   <div class="pad" aria-label="Move">
@@ -633,8 +641,9 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
     <button data-k="left" aria-label="Turn left">◀</button>
     <button data-k="down" aria-label="Back">▼</button>
     <button data-k="right" aria-label="Turn right">▶</button>
+    <button data-k="jump" aria-label="Jump">Jump</button>
   </div>
-  <p class="keys">Arrow keys or W A S D to move</p>
+  <p class="keys">W A S D or arrows: walk. Space: jump. Hold right mouse button and drag: look around.</p>
   <div class="found" id="walk-found" hidden></div>
   <button class="btn ghost" id="walk-exit">Leave the Moon</button>
 </div>
