@@ -254,6 +254,8 @@ body.questing main, body.questing .bar, body.questing footer{visibility:hidden}
 #walk .pad [data-k=jump]{grid-column:3;grid-row:1;font-size:13px;font-weight:700}
 #walk .keys{position:absolute;left:214px;bottom:22px;font-size:var(--s-1);color:var(--smoke)}
 #walk-exit{position:absolute;right:16px;top:16px;padding:7px 14px;font-size:var(--s-1)}
+#walk-sound{position:absolute;right:16px;top:60px;padding:7px 14px;font-size:var(--s-1)}
+#walk .hud .rocks{color:#ffd36b;font-size:var(--s0)}
 #walk .found{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--paper);color:var(--ink);padding:22px 24px;width:min(420px,calc(100vw - 32px));display:grid;gap:12px;box-shadow:0 20px 70px rgba(0,0,0,.85)}
 #walk .found[hidden]{display:none}
 #walk .found h3{font-size:var(--s3)}
@@ -638,12 +640,12 @@ footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);bor
   </div>
   <div class="pad" aria-label="Move">
     <button data-k="up" aria-label="Forward">▲</button>
-    <button data-k="left" aria-label="Turn left">◀</button>
+    <button data-k="left" aria-label="Left">◀</button>
     <button data-k="down" aria-label="Back">▼</button>
-    <button data-k="right" aria-label="Turn right">▶</button>
+    <button data-k="right" aria-label="Right">▶</button>
     <button data-k="jump" aria-label="Jump">Jump</button>
   </div>
-  <p class="keys">W A S D or arrows: walk. Space: jump. Hold right mouse button and drag: look around.</p>
+  <p class="keys">W A S D or arrows: walk where the screen faces. Space: jump. Hold right mouse button and drag: look around.</p>
   <div class="found" id="walk-found" hidden></div>
   <button class="btn ghost" id="walk-exit">Leave the Moon</button>
 </div>

@@ -132,10 +132,11 @@ const G = (function () {
   const btn = $('#guide-btn'), M = window.LBF_MEDIA || {}, vids = {};
   let cur = null, away = false, scrollT = -1e9;
   const ok = !RM && !!M.speaking && !!document.createElement('video').canPlayType('video/mp4');
-  if (ok) ['appear', 'speaking', 'moving', 'sleeping', 'disappear'].forEach(n => {
+  if (ok) ['appear', 'speaking', 'moving', 'sleeping', 'disappear', 'micin', 'mic', 'yes', 'no'].forEach(n => {
+    if (!M[n]) return;
     const v = document.createElement('video');
     v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
-    v.preload = 'auto'; v.loop = n === 'speaking' || n === 'moving' || n === 'sleeping'; v.src = M[n];
+    v.preload = 'auto'; v.loop = n === 'speaking' || n === 'moving' || n === 'sleeping' || n === 'mic'; v.src = M[n];
     btn.append(v); vids[n] = v;
   });
   function show(n) {
@@ -159,13 +160,18 @@ const G = (function () {
   }
   /* speaking while there is something to say, moving while the page scrolls or Hy is thinking, asleep when left alone */
   function decide() {
-    if (!ok || away || cur === 'appear' || cur === 'disappear') return;
+    if (!ok || away || cur === 'appear' || cur === 'disappear' || cur === 'yes' || cur === 'no') return;
+    /* speaking out loud: Hy pulls out a microphone, then talks into it */
+    if (guideState.voice && vids.mic) { if (cur !== 'mic' && cur !== 'micin') show(vids.micin ? 'micin' : 'mic'); return; }
+    if (cur === 'micin') cur = null;
     const busy = guideState.think || performance.now() - scrollT < 350;
     const talking = guideState.typing || guideState.voice;
     show(busy ? 'moving' : talking ? 'speaking' : (guide.classList.contains('rest') && !guide.classList.contains('chatting')) ? 'sleeping' : 'idle');
   }
   if (ok) {
     vids.appear.addEventListener('ended', () => { cur = null; decide(); });
+    if (vids.micin) vids.micin.addEventListener('ended', () => { if (cur !== 'micin') return; if (guideState.voice) show('mic'); else { cur = null; decide(); } });
+    ['yes', 'no'].forEach(n => vids[n] && vids[n].addEventListener('ended', () => { if (cur === n) { cur = null; decide(); } }));
     vids.disappear.addEventListener('ended', () => finishHide());
     addEventListener('scroll', () => { scrollT = performance.now(); }, { passive: true });
     setInterval(decide, 200);
@@ -173,6 +179,7 @@ const G = (function () {
   }
   function finishHide() { guide.classList.add('gone'); $('#guide-show').hidden = false; }
   return {
+    react(n) { if (ok && vids[n] && !away && cur !== 'appear' && cur !== 'disappear') { cur = null; show(n); } },   /* nod yes / shake no */
     hide() { away = true; guide.classList.add('away'); if (ok) show('disappear'); else finishHide(); },
     back() { away = false; guide.classList.remove('gone', 'away'); $('#guide-show').hidden = true; cur = null; if (ok) show('appear'); wake(12000); }
   };
@@ -281,7 +288,7 @@ function openCase(id, opts = {}) {
     const as = el('div', { class: 'as' });
     q.a.forEach((a, ai) => as.append(el('button', { type: 'button', text: a, onclick: e => {
       $$('button', as).forEach(b => b.disabled = true);
-      const ok = ai === q.ok; done++; if (ok) right++;
+      const ok = ai === q.ok; done++; if (ok) right++; G.react(ok ? 'yes' : 'no');
       e.currentTarget.classList.add(ok ? 'right' : 'wrong');
       as.children[q.ok].classList.add('right');
       why.textContent = (ok ? 'Correct. ' : 'Not this time. ') + q.why;
@@ -678,7 +685,7 @@ function init3D() {
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.78, 0.84, 48), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.75 })); ring.position.z = 0.02; g.add(ring);
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 5, 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.35 })); beam.rotation.x = Math.PI / 2; beam.position.set(-0.6, 0.6, 2.5); g.add(beam);
       scene.add(g);
-      return { c, dir, beam, ring, found: false };
+      return { c, dir, beam, ring, g, up, model, found: false, t: 0 };
     });
 
     /* ---------- the astronaut: a jointed rig ---------- */
@@ -800,6 +807,80 @@ function init3D() {
       basis.makeBasis(right, headDir, pos); pr.quaternion.setFromRotationMatrix(basis);
     }
 
+    /* sound: music from the team's folder plus small synth effects */
+    const music = new Audio('audio/music.mp3'); music.loop = true; music.volume = 0.22; music.preload = 'none';
+    let actx = null, soundOn = true;
+    function tone(f0, f1, dur, vol, type, delay) {
+      if (!soundOn) return;
+      try {
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        const t = actx.currentTime + (delay || 0), o = actx.createOscillator(), g = actx.createGain();
+        o.type = type || 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+      } catch (_) {}
+    }
+    const sfx = {
+      step() { tone(95, 55, 0.09, 0.12, 'sine'); }, jump() { tone(220, 620, 0.28, 0.12, 'triangle'); }, land() { tone(120, 45, 0.2, 0.25, 'sine'); },
+      rock() { tone(880, 880, 0.09, 0.14, 'triangle'); tone(1320, 1320, 0.16, 0.14, 'triangle', 0.08); },
+      find() { [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.22, 0.16, 'triangle', i * 0.11)); },
+      yes() { tone(660, 660, 0.12, 0.15, 'triangle'); tone(990, 990, 0.22, 0.15, 'triangle', 0.11); }, no() { tone(210, 150, 0.3, 0.12, 'square'); },
+      boom() { tone(140, 30, 0.7, 0.35, 'sawtooth'); }, zap() { tone(1800, 300, 0.5, 0.1, 'sawtooth'); }
+    };
+    const soundBtn = el('button', { class: 'btn ghost', id: 'walk-sound', text: 'Sound: on', onclick: () => { soundOn = !soundOn; soundBtn.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); if (soundOn && active) music.play().catch(() => {}); else music.pause(); } });
+    box.append(soundBtn);
+
+    /* Moon rocks to pick up on the way, like the Apollo crews did. They lead toward the four machines. */
+    const START = ll(8, 12, 1).normalize(), rocks = [], rockGeo = new THREE.IcosahedronGeometry(0.13, 0), glowGeo = new THREE.SphereGeometry(0.24, 12, 8);
+    sites.forEach((s, n) => [0.3, 0.52, 0.74].forEach((t, m) => {
+      const d = START.clone().lerp(s.dir, t).normalize(), side = new THREE.Vector3().crossVectors(START, s.dir).normalize();
+      d.addScaledVector(side, ((m + n) % 2 ? 1 : -1) * 0.035).normalize();
+      const g = new THREE.Group(); g.position.copy(d).multiplyScalar(R + 0.45);
+      const core = new THREE.Mesh(rockGeo, new THREE.MeshStandardMaterial({ color: 0xffd36b, emissive: 0xc77a10, roughness: 0.4, flatShading: true }));
+      const glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color: 0xffc44d, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
+      g.add(core, glow); scene.add(g); rocks.push({ g, d, core, glow, got: false, t: 0, ph: n * 1.7 + m });
+    }));
+    const rockCount = el('span', { class: 'rocks', text: '' }); $('#walk .hud').append(rockCount);
+    let rocksGot = 0;
+    function rockStep(dt, can) {
+      rocks.forEach(r => {
+        if (r.got) { if (r.t < 0.5) { r.t += dt; const k = r.t / 0.5; r.g.scale.setScalar(1 + k * 1.6); r.g.position.copy(r.d).multiplyScalar(R + 0.45 + k * 1.2); r.core.material.opacity = r.glow.material.opacity = 1 - k; if (k >= 1) r.g.visible = false; } return; }
+        r.core.rotation.y += dt * 2; r.core.rotation.x += dt * 1.1; r.g.position.copy(r.d).multiplyScalar(R + 0.45 + Math.sin(clock * 2.4 + r.ph) * 0.08); r.glow.scale.setScalar(1 + Math.sin(clock * 4 + r.ph) * 0.15);
+        if (can && pos.dot(r.d) > 0.9985) { r.got = true; r.t = 0; r.core.material.transparent = true; rocksGot++; rockCount.textContent = 'Moon rocks: ' + rocksGot + ' / ' + rocks.length; sfx.rock(); if (rocksGot === rocks.length) { cheer = 0; sfx.find(); } }
+      });
+    }
+
+    /* each machine does something when you find it, and a flag pops up to mark it */
+    const flagMat = { mirror: 0xa57bff, silent: 0xe9e9e6, impact: 0xf5c26b };
+    function react(s) {
+      const f = new THREE.Group(); f.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.9, 6), grey, 0, 0.45, 0), mesh(new THREE.BoxGeometry(0.34, 0.2, 0.01), new THREE.MeshBasicMaterial({ color: flagMat[s.c.status] }), 0.18, 0.78, 0));
+      f.position.set(-0.75, 0, 0.5); f.scale.setScalar(0.001); s.up.add(f); s.flag = f; s.t = 0;
+      if (s.c.id === 'apollo15') {                    /* a laser pulse flashes from the mirror back to Earth */
+        const a = s.dir.clone().multiplyScalar(R + 0.3), b = earth.position.clone(), len = a.distanceTo(b);
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, len, 6), new THREE.MeshBasicMaterial({ color: 0x63f08a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.sub(a).normalize()); scene.add(m); s.fx = m; sfx.zap();
+      } else if (s.c.id === 'lcross') {               /* the rocket comes down again */
+        const r = new THREE.Group(); r.add(mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.6, 10), white, 0, 0, 0), mesh(new THREE.ConeGeometry(0.09, 0.2, 10), gold, 0, -0.4, 0)); r.children[1].rotation.x = Math.PI;
+        const fl = mesh(new THREE.ConeGeometry(0.07, 0.5, 8), new THREE.MeshBasicMaterial({ color: 0xffa23a, transparent: true, opacity: 0.8 }), 0, 0.55, 0); r.add(fl);
+        s.up.add(r); s.fx = r; s.dust = [];
+        for (let i = 0; i < 10; i++) { const d = mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: 0xd8d2c4, transparent: true, opacity: 0 }), 0, 0.05, 0); d.userData.a = i / 10 * 6.283; s.up.add(d); s.dust.push(d); }
+      }
+    }
+    function reactStep(dt) {
+      sites.forEach(s => {
+        if (!s.found || !s.flag) return; const t = s.t += dt;
+        const k = Math.min(1, t / 0.45); s.flag.scale.setScalar(k < 1 ? k * (1 + Math.sin(k * Math.PI) * 0.5) : 1); s.flag.rotation.y = Math.sin(clock * 2) * 0.25;   /* pop with overshoot, then wave */
+        const id = s.c.id;
+        if (id === 'apollo15' && s.fx) { s.fx.material.opacity = t < 3 ? (0.35 + 0.35 * Math.sin(t * 22)) * (1 - t / 3) : 0; }
+        else if (id === 'apollo17') { if (t < 5) { const a = t / 5 * 6.283, e = 0.5 - 0.5 * Math.cos(Math.min(1, t / 0.6) * Math.PI); s.model.position.set(-Math.sin(a) * 1.1 * e, 0, (1 - Math.cos(a)) * 1.1 * e - 0.0); s.model.rotation.y = -a - Math.PI / 2 * e; } else { s.model.position.set(0, 0, 0); s.model.rotation.y = 0; } }
+        else if (id === 'surveyor3') { if (t < 3.2) { s.model.rotation.y = Math.sin(t * 5) * 0.5 * (1 - t / 3.2); s.model.position.y = Math.abs(Math.sin(t * 6)) * 0.22 * (1 - t / 3.2); } else { s.model.rotation.y = 0; s.model.position.y = 0; } }
+        else if (id === 'lcross' && s.fx) {
+          if (t < 0.9) { s.fx.visible = true; s.fx.position.set(0, 9 * (1 - (t / 0.9) * (t / 0.9)), 0); }
+          else { if (s.fx.visible) { s.fx.visible = false; sfx.boom(); } const u = (t - 0.9) / 1.6; s.dust.forEach(d => { if (u < 1) { d.position.set(Math.cos(d.userData.a) * u * 1.6, 0.1 + Math.sin(u * Math.PI) * 1.1, Math.sin(d.userData.a) * u * 1.6); d.scale.setScalar(1 + u * 3); d.material.opacity = 0.7 * (1 - u); } else d.material.opacity = 0; }); s.model.scale.setScalar(1.5 * (1 + Math.max(0, 0.25 * Math.sin(Math.min(1, u * 2) * Math.PI)))); }
+        }
+      });
+    }
+
     const NEED = sites.map(s => [s.c.id, TARGETS[s.c.id], s.c.status]);
     const keys = { up: 0, down: 0, left: 0, right: 0, jump: 0 };
     const pos = new THREE.Vector3(), headDir = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), right = new THREE.Vector3(), basis = new THREE.Matrix4();
@@ -807,9 +888,10 @@ function init3D() {
     let speed = 0, turnV = 0, phase = 0, antic = 0, moving = false, cheer = -1, lastStep = 0, idle = 0;
     let jumpT = -1, jumpY = 0, jumpV = 0, landT = 9, camYaw = 0, camPitch = 0.3, look = null, lookIdle = 9, learned = [];
     function reset() {
-      pos.copy(ll(8, 12, 1)).normalize(); headDir.set(0, 0, -1); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize();
-      earth.position.copy(pos).multiplyScalar(R + 22).addScaledVector(headDir, 100);      /* Earth hangs low over the horizon ahead */
-      zoom = 0; got = {}; learned = []; paused = false; speed = 0; phase = 0; cheer = -1; jumpT = -1; jumpY = 0; camYaw = 0; camPitch = 0.3; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.35; });
+      pos.copy(START); headDir.set(0, 0, -1); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize();
+      earth.position.copy(pos).multiplyScalar(R + 2).addScaledVector(headDir, 100);      /* Earth hangs low over the horizon ahead */
+      zoom = 0; got = {}; learned = []; paused = false; speed = 0; phase = 0; cheer = -1; jumpT = -1; jumpY = 0; camYaw = 0; camPitch = 0.3; sites.forEach(s => { s.found = false; s.beam.material.opacity = 0.35; if (s.flag) { s.up.remove(s.flag); s.flag = null; } if (s.fx) { (s.fx.parent || scene).remove(s.fx); s.fx = null; } (s.dust || []).forEach(d => s.up.remove(d)); s.dust = null; s.model.position.set(0, 0, 0); s.model.rotation.y = 0; });
+      rocks.forEach(r => { r.got = false; r.g.visible = true; r.g.scale.setScalar(1); r.core.material.opacity = 1; r.core.material.transparent = false; r.glow.material.opacity = 0.22; }); rocksGot = 0; rockCount.textContent = 'Moon rocks: 0 / ' + rocks.length;
       const list = $('#walk-list'); list.replaceChildren(); rows = {};
       NEED.forEach(([k, label, st]) => { const li = el('li', { class: 's-' + st }, el('span', { class: 'arrow', text: '▲' }), el('span', { text: label }), el('span', { class: 'tick', text: '' })); rows[k] = li; list.append(li); });
       $('#walk-found').hidden = true;
@@ -820,7 +902,7 @@ function init3D() {
       f.hidden = false;
     }
     function find(s) {
-      s.found = true; s.beam.material.opacity = 0.08; Notebook.file(s.c.id); cheer = 0;
+      s.found = true; s.beam.material.opacity = 0.08; Notebook.file(s.c.id); cheer = 0; react(s); sfx.find(); G.react('yes');
       const k = s.c.status, L = LBF.LEARN[s.c.id];
       got[s.c.id] = 1; learned.push(s.c.id); rows[s.c.id].classList.add('done'); rows[s.c.id].querySelector('.tick').textContent = '✓';
       say(s.c.name + '. ' + QUIPS[k], true, { silent: true }); Voice.speak(QUIPS[k]);
@@ -832,7 +914,7 @@ function init3D() {
           el('p', { class: 'fact', text: L ? L[0] : s.c.story }),
           el('div', { class: 'row' }, el('button', { class: 'btn onpaper', text: all ? 'Hy\'s questions' : 'Keep walking', onclick: () => { f.hidden = true; paused = false; if (all) debrief(0, 0); } })));
         f.hidden = false;
-      }, 1250);
+      }, s.c.id === 'lcross' ? 2600 : 2000);
     }
     /* before leaving, Hy checks what you remember about the three machines you found */
     function debrief(i, misses) {
@@ -848,8 +930,8 @@ function init3D() {
       const note = el('p', { text: (i + 1) + ' of ' + learned.length });
       const list = el('div', { class: 'opts' });
       opts.forEach(o => list.append(el('button', { text: o.t, onclick: e => {
-        if (o.ok) { e.currentTarget.classList.add('yes'); $$('button', list).forEach(b => b.disabled = true); note.textContent = 'Yes!'; setTimeout(() => debrief(i + 1, misses), 1500); }
-        else { e.currentTarget.classList.add('no'); e.currentTarget.disabled = true; misses++; note.textContent = 'Try again.'; }
+        if (o.ok) { sfx.yes(); G.react('yes'); e.currentTarget.classList.add('yes'); $$('button', list).forEach(b => b.disabled = true); note.textContent = 'Yes!'; setTimeout(() => debrief(i + 1, misses), 1500); }
+        else { sfx.no(); G.react('no'); e.currentTarget.classList.add('no'); e.currentTarget.disabled = true; misses++; note.textContent = 'Try again.'; }
       } })));
       f.replaceChildren(el('h3', { text: L[1] }), note, list);
     }
@@ -861,9 +943,10 @@ function init3D() {
     function start() {
       reset(); active = true; box.hidden = false; document.body.classList.add('questing'); Missions.stopAll && Missions.stopAll();
       say('Find all four. Remember them. I will ask.', true);
+      if (soundOn) { try { music.currentTime = 0; } catch (_) {} music.play().catch(() => {}); }
     }
-    function stop() { active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
-    LBF.walk = { start, stop, quiz(ids) { learned = ids; debrief(0, 0); } };
+    function stop() { music.pause(); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
+    LBF.walk = { start, stop, quiz(ids) { learned = ids; debrief(0, 0); }, warp(v) { pos.copy(typeof v === 'number' ? rocks[v].d : sites.find(x => x.c.id === v).dir); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize(); } };
     const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Space: 'jump' };
     addEventListener('keydown', e => { if (!active || !KEYMAP[e.code] || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; keys[KEYMAP[e.code]] = 1; e.preventDefault(); });
     addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = 0; });
@@ -899,7 +982,7 @@ function init3D() {
           if (jumpV === 0 && jumpY === 0) jumpV = 2.6;
           jumpV -= 2.9 * dt; jumpY += jumpV * dt;
           squash -= Math.max(0, jumpV) * 0.05; armsOut = 0.9 - Math.abs(jumpV) * 0.12; tuck = Math.max(0, 0.35 - Math.abs(jumpV) * 0.1);
-          if (jumpY <= 0) { jumpY = 0; jumpV = 0; jumpT = -1; landT = 0; for (let i = 0; i < 4; i++) { const pf = puffs[puffI++ % puffs.length]; pf.position.copy(pos).multiplyScalar(R + 0.05).addScaledVector(right, (i % 2 ? 0.2 : -0.2)).addScaledVector(headDir, i < 2 ? 0.15 : -0.15); pf.userData.t = 0; } bootprint(1); bootprint(-1); }
+          if (jumpY <= 0) { jumpY = 0; jumpV = 0; jumpT = -1; landT = 0; sfx.land(); for (let i = 0; i < 4; i++) { const pf = puffs[puffI++ % puffs.length]; pf.position.copy(pos).multiplyScalar(R + 0.05).addScaledVector(right, (i % 2 ? 0.2 : -0.2)).addScaledVector(headDir, i < 2 ? 0.15 : -0.15); pf.userData.t = 0; } bootprint(1); bootprint(-1); }
         }
         hop += jumpY;
       }
@@ -931,7 +1014,7 @@ function init3D() {
       shadow.scale.setScalar(1 - Math.min(0.55, hop * 0.5)); shadow.material.opacity = 0.4 - Math.min(0.28, hop * 0.3);
       /* dust and a bootprint at each footfall */
       const step = Math.floor(phase / Math.PI);
-      if (step !== lastStep && v > 0.25 && grounded) { lastStep = step; const sd = step % 2 ? 1 : -1; bootprint(sd); const pf = puffs[puffI++ % puffs.length]; pf.position.copy(pos).multiplyScalar(R + 0.05).addScaledVector(right, sd * 0.1); pf.userData.t = 0; }
+      if (step !== lastStep && v > 0.25 && grounded) { lastStep = step; const sd = step % 2 ? 1 : -1; sfx.step(); bootprint(sd); const pf = puffs[puffI++ % puffs.length]; pf.position.copy(pos).multiplyScalar(R + 0.05).addScaledVector(right, sd * 0.1); pf.userData.t = 0; }
       puffs.forEach(pf => { const t = pf.userData.t += dt; if (t < 0.8) { pf.material.opacity = 0.45 * (1 - t / 0.8); pf.scale.setScalar(1 + t * 5); } else pf.material.opacity = 0; });
     }
 
@@ -946,11 +1029,21 @@ function init3D() {
       if (!active) return;
       clock += dt; zoom = Math.min(1, zoom + dt / 2.6);
       const can = !paused && zoom >= 1 && cheer < 0;
-      const want = can ? keys.up - keys.down * 0.5 : 0, turn = can ? keys.left - keys.right : 0;
-      if (can && keys.jump && jumpT < 0 && landT > 0.25) { jumpT = 0; jumpY = 0; jumpV = 0; }
+      /* walk where the screen is facing: forward goes away from the camera, left and right go across the screen,
+         and the astronaut turns to face the way it is going */
+      const ix = can ? keys.right - keys.left : 0, iz = can ? keys.up - keys.down : 0;
+      let want = 0, turn = 0;
+      if (ix || iz) {
+        tmp.copy(headDir).applyAxisAngle(pos, camYaw); tmp2.crossVectors(pos, tmp);          /* the camera's forward and left, on the ground */
+        tmp.multiplyScalar(iz).addScaledVector(tmp2, -ix).normalize();
+        tmp2.crossVectors(headDir, tmp);
+        const ang = Math.atan2(pos.dot(tmp2), headDir.dot(tmp)), stepA = Math.max(-7 * dt, Math.min(7 * dt, ang));
+        headDir.applyAxisAngle(pos, stepA); camYaw -= stepA;                                 /* the camera stays where the player left it */
+        turn = Math.max(-1, Math.min(1, ang * 1.4)); want = Math.max(0.12, Math.cos(ang));
+      }
+      if (can && keys.jump && jumpT < 0 && landT > 0.25) { jumpT = 0; jumpY = 0; jumpV = 0; sfx.jump(); }
       turnV += (turn - turnV) * Math.min(1, dt * 6);
       animate(dt, want, turnV);
-      if (Math.abs(turnV) > 0.01) headDir.applyAxisAngle(pos, turnV * 1.9 * dt);
       if (Math.abs(speed) > 0.01) pos.addScaledVector(headDir, speed * 2.7 * dt / R).normalize();
       headDir.addScaledVector(pos, -headDir.dot(pos)).normalize();
       right.crossVectors(pos, headDir).normalize();
@@ -958,12 +1051,12 @@ function init3D() {
       /* 11 solid drawing: the figure stands on the ground with its own up, right and forward */
       basis.makeBasis(right, pos, headDir); rig.quaternion.setFromRotationMatrix(basis); rig.position.copy(pos).multiplyScalar(R);
       sites.forEach(s => { if (s.found) return; tmp.copy(s.dir).addScaledVector(pos, -s.dir.dot(pos)); rows[s.c.id].querySelector('.arrow').style.transform = 'rotate(' + Math.atan2(-tmp.dot(right), tmp.dot(headDir)) + 'rad)'; });
-      skyStep(dt);
+      skyStep(dt); rockStep(dt, can); reactStep(dt);
       sites.forEach(s => { s.ring.scale.setScalar(1 + Math.sin(clock * 3 + s.dir.x * 9) * 0.06); });
       /* 3 staging: fly in from above, then hold the astronaut in clear silhouette against the black sky.
          The camera orbits wherever the player drags it and drifts back behind them once they walk on. */
       lookIdle += dt;
-      if (!look && lookIdle > 1.2 && Math.abs(speed) > 0.2) { camYaw += (Math.atan2(Math.sin(-camYaw), Math.cos(-camYaw))) * Math.min(1, dt * 1.6); camPitch += (0.3 - camPitch) * Math.min(1, dt * 1.2); }
+      if (!look && lookIdle > 1.5 && Math.abs(speed) > 0.2 && keys.up && !keys.down) { camYaw += (Math.atan2(Math.sin(-camYaw), Math.cos(-camYaw))) * Math.min(1, dt * 0.9); camPitch += (0.3 - camPitch) * Math.min(1, dt * 1.2); }
       const e = ease(zoom), dist = 3.5;
       tmp2.copy(headDir).multiplyScalar(-1).applyAxisAngle(pos, camYaw);                 /* direction from astronaut to camera, on the ground */
       tmp.copy(pos).multiplyScalar(R + 1.0 + Math.sin(camPitch) * dist).addScaledVector(tmp2, Math.cos(camPitch) * dist);
