@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Left Behind Files</title>
+<meta name="description" content="A hydrogen atom detective investigates the machines NASA left on the Moon and Mars. An interactive 3D story for school-age space fans.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: one black sky runs behind everything; 3D worlds sit in open "stages";
+   anything the detective hands you (files, notes) is paper. Left-aligned throughout. */
+:root{
+  color-scheme: dark;
+  --void:#000000;        /* space */
+  --soot:#121214;        /* panels on space */
+  --line:#34343a;        /* hairlines, from the logo's greys */
+  --smoke:#8d8d93;       /* secondary text */
+  --chalk:#eeeeea;       /* primary text on space */
+  --paper:#e7e4d9;       /* case files and notes */
+  --ink:#17171a;         /* text on paper */
+  /* Hydrogen's Balmer lines, used as the status code */
+  --h-alpha:#ff5a4d;     /* 656 nm */
+  --h-beta:#58d7e6;      /* 486 nm */
+  --h-gamma:#7f8cff;     /* 434 nm */
+  --h-delta:#a57bff;     /* 410 nm */
+  --laser:#63f08a;       /* real ranging lasers are green */
+  --display:"Special Elite","Courier New",Courier,monospace;
+  --body:"Atkinson Hyperlegible","Verdana","Segoe UI",sans-serif;
+  --s-1:.875rem; --s0:1rem; --s1:1.25rem; --s2:1.563rem; --s3:1.953rem; --s4:2.441rem; --s5:3.4rem;
+  --gut:clamp(16px,4vw,48px);
+  --wrap:1280px;
+}
+*{box-sizing:border-box}
+html{font-size:17px;scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--void);color:var(--chalk);font-family:var(--body);line-height:1.55;overflow-x:hidden}
+img{max-width:100%;display:block}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--h-beta);outline-offset:3px}
+h1,h2,h3{font-family:var(--display);font-weight:400;line-height:1.12;margin:0;text-wrap:balance}
+h2{font-size:clamp(var(--s3),4.4vw,var(--s5))}
+h3{font-size:var(--s2)}
+p{margin:0}
+.lede{font-size:var(--s1);max-width:60ch;color:var(--chalk)}
+.quiet{color:var(--smoke)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:block}
+.bar,main,footer{position:relative;z-index:1}
+
+/* top bar */
+.bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;padding:10px var(--gut);background:rgba(0,0,0,.82);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--display);font-size:var(--s0);white-space:nowrap}
+.brand img{width:34px;height:34px;border-radius:50%;border:1px solid var(--line)}
+.bar nav{display:flex;gap:4px;overflow-x:auto;flex:1;scrollbar-width:none}
+.bar nav::-webkit-scrollbar{display:none}
+.bar nav a{padding:6px 10px;border-radius:4px;text-decoration:none;color:var(--smoke);font-size:var(--s-1);white-space:nowrap}
+.bar nav a:hover,.bar nav a[aria-current="true"]{color:var(--chalk);background:var(--soot)}
+.toggle{background:none;border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-size:var(--s-1);color:var(--smoke);white-space:nowrap}
+.toggle[aria-pressed="true"]{color:var(--chalk);border-color:var(--chalk)}
+
+section{padding:clamp(56px,9vw,120px) var(--gut)}
+.inner{max-width:var(--wrap);margin:0 auto}
+.head{display:grid;gap:16px;margin-bottom:36px;max-width:68ch}
+.fileno{font-family:var(--display);color:var(--smoke);font-size:var(--s0)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--chalk);background:var(--chalk);color:var(--ink);padding:11px 18px;border-radius:4px;font-weight:700;text-decoration:none}
+.btn:hover{background:#fff}
+.btn.ghost{background:transparent;color:var(--chalk)}
+.btn.ghost:hover{background:var(--soot)}
+.btn.onpaper{border-color:var(--ink);background:var(--ink);color:var(--paper)}
+.btn.onpaper.ghost{background:transparent;color:var(--ink)}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+
+/* stages: holes where the 3D sky shows through */
+.stage{position:relative;min-height:440px;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.stage.grab{cursor:grab}.stage.grabbing{cursor:grabbing}
+.stage .hint{position:absolute;left:0;bottom:0;font-size:var(--s-1);color:var(--smoke);pointer-events:none}
+.tip{position:absolute;pointer-events:none;background:var(--paper);color:var(--ink);font-family:var(--display);font-size:var(--s-1);padding:4px 8px;border-radius:3px;transform:translate(12px,-130%);white-space:nowrap;display:none;z-index:3}
+.pinlabel{position:absolute;pointer-events:none;font-family:var(--display);font-size:var(--s-1);color:var(--chalk);background:rgba(0,0,0,.7);border:1px solid var(--line);padding:2px 8px;border-radius:3px;transform:translate(14px,-50%);white-space:nowrap;display:none;z-index:2}
+body.no3d .stage{display:none}
+.no3d-note{display:none;border:1px solid var(--line);padding:12px 16px;border-radius:4px;color:var(--smoke);max-width:60ch}
+body.no3d .no3d-note{display:block}
+
+/* hero */
+.hero{padding-top:clamp(40px,7vw,90px);padding-bottom:0;position:relative}
+.hero .stage{position:absolute;inset:0;min-height:0;z-index:-1}
+.hero .inner{min-height:min(74vh,700px);display:grid;align-content:center;gap:26px;padding-bottom:clamp(40px,7vw,90px)}
+.hero h1{font-size:clamp(2.6rem,8.4vw,6.4rem);max-width:9ch;letter-spacing:-.01em;text-shadow:0 0 28px #000,0 0 6px #000}
+.hero .lede{text-shadow:0 0 14px #000,0 0 4px #000;max-width:38ch}
+.challenge{font-size:var(--s-1);color:var(--smoke);max-width:52ch;text-shadow:0 0 8px #000}
+
+/* hydrogen fingerprint */
+.specwrap{padding:0 var(--gut);position:relative;z-index:1}
+.spectrum{max-width:var(--wrap);margin:0 auto}
+.spectrum .strip{position:relative;height:34px;background:linear-gradient(90deg,#08060c,#050505 50%,#0b0606);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.spectrum i{position:absolute;top:0;bottom:0;width:3px;box-shadow:0 0 12px 1px currentColor;background:currentColor}
+.spectrum figcaption{margin-top:8px;font-size:var(--s-1);color:var(--smoke);max-width:75ch}
+figure{margin:0}
+
+/* story */
+.story{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr);gap:clamp(24px,5vw,72px);align-items:start}
+.story .tale{display:grid;gap:18px;font-size:var(--s1);max-width:58ch}
+.story .tale p:first-child{font-family:var(--display);font-size:var(--s2);line-height:1.25}
+.portrait{background:var(--paper);color:var(--ink);padding:14px 14px 16px;transform:rotate(1.6deg);box-shadow:0 18px 50px rgba(0,0,0,.7);max-width:340px;justify-self:center}
+.portrait img{width:100%;aspect-ratio:1;object-fit:cover;filter:contrast(1.05)}
+.portrait figcaption{font-family:var(--display);font-size:var(--s-1);margin-top:12px;line-height:1.35}
+.key{margin-top:44px;display:grid;gap:10px;border-top:1px solid var(--line);padding-top:24px}
+.key ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:10px 26px}
+.key li{display:flex;align-items:center;gap:8px;font-size:var(--s-1)}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c);flex:none}
+.s-active{--c:var(--h-beta)}.s-mirror{--c:var(--h-delta)}.s-silent{--c:#c9c9cd}.s-impact{--c:#f5c26b}.s-lost{--c:var(--h-alpha)}
+
+/* worlds */
+.world-grid{display:grid;grid-template-columns:minmax(210px,250px) minmax(0,1fr) minmax(300px,390px);gap:24px;align-items:start}
+.world .stage{min-height:560px}
+.picker{display:grid;gap:12px}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 11px;font-size:var(--s-1);color:var(--smoke)}
+.chip[aria-pressed="true"]{background:var(--chalk);color:var(--ink);border-color:var(--chalk)}
+.caselist{list-style:none;margin:0;padding:0;display:grid;gap:2px;max-height:500px;overflow:auto;scrollbar-color:var(--line) transparent}
+.caselist button{width:100%;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;text-align:left;background:transparent;border:0;border-left:3px solid transparent;padding:7px 8px 7px 10px;border-radius:0 4px 4px 0}
+.caselist button:hover{background:var(--soot)}
+.caselist button[aria-current="true"]{background:var(--soot);border-left-color:var(--chalk)}
+.caselist .nm{font-weight:700;font-size:var(--s-1);line-height:1.25}
+.caselist .yr{grid-column:2;font-size:.78rem;color:var(--smoke);font-variant-numeric:tabular-nums}
+.caselist .dot{grid-row:1 / span 2}
+
+/* the paper case file */
+.file{background:var(--paper);color:var(--ink);padding:22px 22px 20px;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.6);display:grid;gap:14px}
+.file::before{content:attr(data-file);position:absolute;left:0;top:-26px;height:26px;padding:5px 14px 0;background:var(--paper);font-family:var(--display);font-size:var(--s-1);border-radius:6px 10px 0 0}
+.world .file{margin-top:26px}
+.file h3{font-size:var(--s3);padding-right:8px}
+.stamp{justify-self:start;font-family:var(--display);font-size:var(--s-1);text-transform:uppercase;letter-spacing:.06em;border:2px solid var(--sc);color:var(--sc);padding:4px 10px 2px;border-radius:3px;transform:rotate(-2.5deg);margin:2px 0 4px}
+.stamp.s-active{--sc:#087482}.stamp.s-mirror{--sc:#5a36c9}.stamp.s-silent{--sc:#55555b}.stamp.s-impact{--sc:#8a5a00}.stamp.s-lost{--sc:#b3271c}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;margin:0;font-size:var(--s-1);border-top:1px solid #b9b5a6;border-bottom:1px solid #b9b5a6;padding:10px 0}
+.facts dt{font-family:var(--display);color:#55524a}
+.facts dd{margin:0;font-variant-numeric:tabular-nums}
+.file h4{font-family:var(--display);font-weight:400;font-size:var(--s0);margin:0 0 3px;color:#55524a}
+.file .blk p{font-size:var(--s0);line-height:1.5}
+.file .clue{border-left:3px solid var(--ink);padding-left:12px;font-style:italic}
+.file .src{font-size:var(--s-1)}
+.leftovers{margin-top:32px;max-width:70ch;color:var(--smoke)}
+
+/* mirrors */
+.lab{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:start}
+.beam{margin-bottom:28px}
+.beam .stage{min-height:0;height:clamp(200px,24vw,300px)}
+.beam .hint{position:static;display:block;margin-top:6px}
+.panel{background:var(--soot);border:1px solid var(--line);border-radius:6px;padding:20px;display:grid;gap:16px}
+.panel label,.panel legend{font-size:var(--s-1);color:var(--smoke);padding:0}
+fieldset{border:0;margin:0;padding:0;display:grid;gap:8px}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opts label{position:relative}
+.opts input{position:absolute;opacity:0;inset:0}
+.opts span{display:block;border:1px solid var(--line);border-radius:4px;padding:6px 12px;color:var(--chalk);font-size:var(--s-1)}
+.opts input:checked + span{background:var(--chalk);color:var(--ink);border-color:var(--chalk)}
+.opts input:focus-visible + span{outline:3px solid var(--h-beta);outline-offset:2px}
+input[type=range]{width:100%;accent-color:var(--laser)}
+.ends{display:flex;justify-content:space-between;font-size:.78rem;color:var(--smoke)}
+.readout{font-family:var(--display);display:grid;gap:4px;min-height:5.2em}
+.readout .big{font-size:var(--s3);color:var(--laser);font-variant-numeric:tabular-nums}
+.mirror-facts{margin:0;padding:0;font-size:var(--s1);list-style:none;display:grid;gap:10px;max-width:60ch}
+.mirror-facts li{padding-left:18px;position:relative}
+.mirror-facts li::before{content:"";position:absolute;left:0;top:.6em;width:8px;height:2px;background:var(--laser)}
+
+/* 3D models */
+.hangar{display:grid;grid-template-columns:minmax(200px,260px) minmax(0,1fr);gap:24px;align-items:start}
+.hangar .stage{min-height:520px}
+.tabs{display:grid;gap:4px}
+.tabs button{text-align:left;background:transparent;border:1px solid transparent;border-radius:4px;padding:9px 12px}
+.tabs button:hover{background:var(--soot)}
+.tabs button[aria-selected="true"]{background:var(--chalk);color:var(--ink);font-weight:700}
+.modelnote{margin-top:16px;font-size:var(--s-1);color:var(--smoke);display:grid;gap:8px}
+.modelnote strong{color:var(--chalk);font-family:var(--display);font-weight:400;font-size:var(--s1)}
+.loading{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--display);color:var(--smoke);pointer-events:none}
+
+/* overtime */
+.over{display:grid;gap:18px;max-width:900px}
+.over .r{display:grid;grid-template-columns:160px 1fr;gap:6px 18px;align-items:center}
+.over .n{font-family:var(--display);font-size:var(--s1)}
+.over .track{height:26px;position:relative}
+.over .fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--h-beta),#bff3f9);border-radius:0 3px 3px 0;min-width:6px}
+.over .x{position:absolute;top:50%;transform:translateY(-50%);padding-left:10px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.over .d{grid-column:2;font-size:var(--s-1);color:var(--smoke)}
+
+/* ask */
+.ask{display:grid;gap:22px;max-width:820px}
+.askbox{display:flex;gap:8px}
+.askbox input{flex:1;min-width:0}
+input[type=text]{font:inherit;background:var(--soot);color:var(--chalk);border:1px solid var(--line);border-radius:4px;padding:11px 14px}
+input[type=text]::placeholder{color:var(--smoke)}
+.qs{display:flex;flex-wrap:wrap;gap:8px}
+.qs button{border:1px solid var(--line);background:var(--soot);border-radius:4px;padding:8px 12px;font-size:var(--s-1);text-align:left}
+.qs button:hover{border-color:var(--chalk)}
+
+/* missions */
+.missions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;max-width:1040px}
+.mcard{background:var(--soot);border:1px solid var(--line);border-left:3px solid #ff9a3d;padding:18px 20px;display:grid;gap:12px;align-content:start}
+.mcard p{color:var(--chalk)}
+select{font:inherit;background:var(--void);color:var(--chalk);border:1px solid var(--line);border-radius:4px;padding:10px 12px;max-width:100%}
+.notebook{margin-top:40px;max-width:1040px;display:grid;gap:12px;border-top:1px solid var(--line);padding-top:26px}
+.stamps{display:flex;flex-wrap:wrap;gap:6px}
+.stamps i{width:14px;height:14px;border-radius:50%;border:1px solid var(--line)}
+.stamps i.got{background:var(--c);border-color:var(--c);box-shadow:0 0 8px var(--c)}
+.badges{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.badges li{font-family:var(--display);font-size:var(--s-1);border:1px dashed var(--line);color:var(--smoke);padding:6px 12px 4px;border-radius:3px}
+.badges li.got{border:2px solid #ff9a3d;color:#ffb86b;transform:rotate(-1.5deg)}
+.mission{position:absolute;left:0;right:0;top:0;z-index:4;background:var(--paper);color:var(--ink);padding:12px 14px;display:none;gap:8px;box-shadow:0 12px 40px rgba(0,0,0,.6);cursor:default}
+.mission.on{display:grid}
+.mission strong{font-family:var(--display);font-weight:400;font-size:var(--s1)}
+.mission .row{gap:8px}
+.mission .btn{padding:6px 12px;font-size:var(--s-1)}
+#chat header .back{display:none}
+#chat.mode header .back{display:inline-block}
+#mic{display:none}
+#mic.ok{display:inline-flex}
+#mic.live{background:#b3271c;border-color:#b3271c;color:#fff}
+.msg.hy .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.msg.hy .acts button{font-family:var(--body);font-weight:700;font-size:var(--s-1);background:none;border:1px solid var(--ink);border-radius:4px;padding:4px 10px;color:var(--ink)}
+.msg.them{justify-self:start;background:#1d2a33;color:#e9f6ff;font-family:var(--display)}
+
+/* quiz */
+.quiz{display:grid;gap:18px;max-width:820px}
+.qcard{background:var(--soot);border:1px solid var(--line);border-radius:6px;padding:18px 20px;display:grid;gap:12px}
+.qcard legend{font-family:var(--display);font-size:var(--s1);color:var(--chalk);float:left;width:100%;margin-bottom:10px}
+.qcard .as{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;clear:both}
+.qcard .as button{border:1px solid var(--line);background:transparent;border-radius:4px;padding:9px 12px;text-align:left}
+.qcard .as button:hover:not(:disabled){border-color:var(--chalk)}
+.qcard .as button.right{background:#0f3d43;border-color:var(--h-beta)}
+.qcard .as button.wrong{background:#431410;border-color:var(--h-alpha)}
+.qcard .as button:disabled{cursor:default}
+.qcard .why{font-size:var(--s-1);color:var(--smoke);min-height:1.5em}
+.score{font-family:var(--display);font-size:var(--s2)}
+
+/* sources */
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px 40px}
+.srcgrid h3{font-size:var(--s1);margin-bottom:8px}
+.srcgrid ul{margin:0;padding-left:18px;display:grid;gap:5px;font-size:var(--s-1)}
+.srcgrid a{color:var(--chalk);text-underline-offset:3px}
+.about{margin-top:56px;border-top:1px solid var(--line);padding-top:32px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:24px;align-items:start;max-width:860px}
+.about img{width:96px;height:96px;border-radius:50%;border:1px solid var(--line)}
+.about dl{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin:0}
+.about dt{font-family:var(--display);color:var(--smoke)}
+.about dd{margin:0}
+footer{padding:28px var(--gut) 150px;color:var(--smoke);font-size:var(--s-1);border-top:1px solid var(--line)}
+
+/* the guide: the team's hydrogen buddy, played from five short clips */
+#guide{position:fixed;right:10px;bottom:6px;z-index:30;display:flex;flex-direction:row-reverse;align-items:flex-end;gap:2px;pointer-events:none;max-width:calc(100vw - 20px)}
+#guide-btn{pointer-events:auto;width:156px;height:156px;flex:none;border:0;padding:0;position:relative;background:none;border-radius:50%}
+#guide-btn video,#guide-btn img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:cover;border-radius:50%;
+  -webkit-mask-image:radial-gradient(circle,#000 52%,transparent 70%);mask-image:radial-gradient(circle,#000 52%,transparent 70%)}
+#guide-btn video{opacity:0}
+#guide-btn video.on{opacity:1}
+#bubble{pointer-events:auto;background:var(--paper);color:var(--ink);padding:12px 14px 12px;border-radius:4px 4px 0 4px;width:300px;max-width:calc(100vw - 180px);margin-bottom:46px;box-shadow:0 10px 40px rgba(0,0,0,.7);display:grid;gap:8px;position:relative;transition:opacity .25s,transform .25s}
+#bubble::after{content:"";position:absolute;right:-9px;bottom:0;border:9px solid transparent;border-bottom-color:var(--paper);border-left-color:var(--paper);border-right-width:0}
+#bubble p{font-family:var(--display);font-size:.94rem;line-height:1.38;min-height:4.14em}
+#bubble .row{gap:8px;justify-content:space-between}
+#bubble button{background:none;border:0;border-bottom:1px solid var(--ink);padding:0;font-size:var(--s-1);font-weight:700;color:var(--ink)}
+#bubble .x{border:0;font-weight:400;color:#6b675c}
+#guide.rest #bubble,#guide.chatting #bubble,#guide.away #bubble{opacity:0;transform:translateX(12px);pointer-events:none;visibility:hidden}
+#guide.gone{display:none}
+#guide-show{position:fixed;right:14px;bottom:14px;z-index:30;background:var(--soot);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:var(--s-1)}
+#guide-show[hidden]{display:none}
+@media (min-width:900px){section,.specwrap{padding-right:max(var(--gut),180px)}}
+.aistar{width:170px;aspect-ratio:270/168;display:block;margin-bottom:-10px;margin-left:-22px;-webkit-mask-image:radial-gradient(ellipse,#000 48%,transparent 72%);mask-image:radial-gradient(ellipse,#000 48%,transparent 72%)}
+/* trailer */
+#trailer{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.88);display:none;place-items:center;padding:16px}
+#trailer.open{display:grid}
+#trailer .box{width:min(960px,100%);display:grid;gap:10px;justify-items:end}
+#trailer video{width:100%;aspect-ratio:16/9;background:#000;border-radius:6px}
+
+/* chat drawer */
+#chat{position:fixed;right:14px;bottom:160px;z-index:40;width:min(400px,calc(100vw - 28px));height:min(560px,calc(100% - 226px));background:var(--paper);color:var(--ink);display:none;grid-template-rows:auto 1fr auto auto;box-shadow:0 20px 70px rgba(0,0,0,.85);border-radius:6px;overflow:hidden}
+#chat.open{display:grid;grid-template-columns:minmax(0,1fr)}
+#chat header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:12px 14px;border-bottom:1px solid #b9b5a6}
+#chat.mode .mode{display:none}
+#chat header h2{font-size:var(--s1);flex:1}
+#chat header button{background:none;border:1px solid var(--ink);border-radius:4px;padding:3px 10px;color:var(--ink)}
+.mode{font-size:.74rem;border-radius:999px;padding:2px 9px;border:1px solid #55524a;color:#55524a;white-space:nowrap}
+.mode.live{border-color:#087482;color:#087482}
+#log{overflow:auto;padding:14px;display:grid;gap:10px;align-content:start}
+.msg{max-width:88%;padding:9px 12px;border-radius:4px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.96rem;line-height:1.45}
+.msg.me{justify-self:end;background:var(--ink);color:var(--paper)}
+.msg.hy{justify-self:start;background:#d5d1c3;font-family:var(--display)}
+.msg.hy .open{display:inline-block;margin-top:8px;font-family:var(--body);font-weight:700;font-size:var(--s-1);background:none;border:1px solid var(--ink);border-radius:4px;padding:4px 10px;color:var(--ink)}
+.msg.note{justify-self:center;background:none;color:#55524a;font-size:.8rem;text-align:center;max-width:100%}
+#chat .qs{padding:0 14px 10px;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+#chat .qs button{white-space:nowrap;flex:none}
+#chat .qs button{background:transparent;border-color:#8f8b7d;color:var(--ink);padding:5px 9px;font-size:.8rem}
+#chat form{display:flex;gap:8px;padding:12px 14px;border-top:1px solid #b9b5a6}
+#chat form input{flex:1;min-width:0;background:#f4f2ea;color:var(--ink);border-color:#8f8b7d}
+#chat form input::placeholder{color:#6b675c}
+
+@media (max-width:1100px){
+  .world-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
+  .world .stage{grid-column:1 / -1;grid-row:1;min-height:460px}
+}
+@media (max-width:760px){
+  html{font-size:16px}
+  .missions{grid-template-columns:minmax(0,1fr)}
+  .story,.lab,.hangar,.world-grid{grid-template-columns:minmax(0,1fr)}
+  .world .stage{min-height:380px}
+  .caselist{max-height:230px}
+  .hangar .stage{min-height:380px;grid-row:2}
+  .tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .over .r{grid-template-columns:1fr}.over .d{grid-column:1}
+  .about{grid-template-columns:1fr}
+  #guide-btn{width:104px;height:104px}
+  #bubble{max-width:calc(100vw - 124px);margin-bottom:28px}
+  #chat{bottom:108px;height:min(560px,calc(100% - 170px))}
+  .brand span{display:none}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<canvas id="gl" aria-hidden="true"></canvas>
+
+<header class="bar">
+  <a class="brand" href="#top"><img src="assets/logo.jpg" alt=""><span>The Left Behind Files</span></a>
+  <nav aria-label="Sections">
+    <a href="#story">The case</a>
+    <a href="#moon">Moon</a>
+    <a href="#mirrors">Mirrors</a>
+    <a href="#mars">Mars</a>
+    <a href="#models">3D models</a>
+    <a href="#overtime">Overtime</a>
+    <a href="#ask">Missions</a>
+    <a href="#quiz">Quiz</a>
+    <a href="#sources">Sources</a>
+  </nav>
+  <button class="toggle" id="sound" aria-pressed="false">Voice off</button>
+</header>
+
+<main>
+<section class="hero" id="top">
+  <div class="stage" id="st-hero"></div>
+  <div class="inner">
+    <h1>The Left Behind Files</h1>
+    <p class="lede">Since the 1960s NASA has left landers, rovers, a helicopter and even mirrors on the Moon and Mars. A hydrogen atom detective named Hy is on the case.</p>
+    <div class="row">
+      <a class="btn" href="#story">Open the case</a>
+      <button class="btn ghost" data-ask="">Talk to Hy</button>
+      <button class="btn ghost" id="trailer-open">Watch the 15-second trailer</button>
+    </div>
+    <p class="challenge">Built for the NASA Space Apps Challenge. Every date, distance and coordinate comes from NASA sources, listed at the end.</p>
+  </div>
+</section>
+
+<div class="specwrap"><figure class="spectrum" aria-label="Hydrogen emission spectrum">
+  <div class="strip">
+    <i style="left:9.4%;color:var(--h-delta)"></i><i style="left:16.9%;color:var(--h-gamma)"></i><i style="left:33.1%;color:var(--h-beta)"></i><i style="left:86.3%;color:var(--h-alpha)"></i>
+  </div>
+  <figcaption>My fingerprints. These four lines are the exact colors a hydrogen atom glows: violet, blue, teal and red. Astronomers use them to find hydrogen anywhere in the universe. I used them to color-code the files.</figcaption>
+</figure></div>
+
+<section id="story" data-say="story">
+  <div class="inner">
+    <div class="story">
+      <div class="tale">
+        <p>It was a quiet night in the solar system. Too quiet.</p>
+        <p>The name's Hy. Hy Drogen. One proton, one electron, zero days off. I've been around since just after the Big Bang, and I get everywhere. I'm in the water you drink, the stars you wish on, and the rocket fuel that pushed people to the Moon.</p>
+        <p>A kid about your age walked into my office with a question. <em>People sent machines to the Moon and Mars. Where are they now? Did anybody bring them home?</em></p>
+        <p>Nobody brought them home. They are still out there, right where they stopped. Some are still working. Some went quiet years ago. One was never heard from again.</p>
+        <p>Every one of them left clues about how the Moon and Mars work. Grab your notebook, partner. We're opening the files.</p>
+        <div class="row" style="margin-top:8px">
+          <a class="btn" href="#moon">Start with the Moon</a>
+          <a class="btn ghost" href="#mars">Skip to Mars</a>
+        </div>
+      </div>
+      <figure class="portrait">
+        <img src="assets/logo.jpg" alt="A grey atom symbol wearing a black fedora hat.">
+        <figcaption>My official detective portrait. I only wear the hat for photos. The artist gave me a few extra electrons, too. A real hydrogen atom has exactly one.</figcaption>
+      </figure>
+    </div>
+    <div class="key">
+      <p class="quiet">How to read the lights on the maps</p>
+      <ul id="statuskey"></ul>
+    </div>
+  </div>
+</section>
+
+<section id="moon" class="world" data-say="moon">
+  <div class="inner">
+    <div class="head">
+      <p class="fileno">Cabinet L: the Moon</p>
+      <h2>384,400 km away, and covered in evidence</h2>
+      <p class="lede">Drag the Moon to turn it. Click a light to open its file. The south pole is busy, so tilt it and look underneath.</p>
+    </div>
+    <p class="no3d-note">This browser could not start 3D graphics, so the globe is hidden. Every file is still in the list below.</p>
+    <div class="world-grid">
+      <div class="picker">
+        <div class="filters" data-world="moon" role="group" aria-label="Filter Moon files"></div>
+        <ol class="caselist" data-world="moon"></ol>
+      </div>
+      <div class="stage grab" id="st-moon" aria-label="3D globe of the Moon with a light at each hardware site"><div class="mission" id="mis-moon" aria-live="polite"></div><div class="tip"></div><div class="pinlabel"></div><span class="hint">Drag to turn</span></div>
+      <article class="file" id="file-moon" aria-live="polite"></article>
+    </div>
+  </div>
+</section>
+
+<section id="mirrors" data-say="mirrors">
+  <div class="inner">
+    <div class="head">
+      <p class="fileno">Experiment: the mirrors</p>
+      <h2>Measure the distance to the Moon with a laser</h2>
+      <p class="lede">Astronauts left trays of glass prisms on the Moon. Each prism sends light straight back where it came from. Fire a laser at one, time the echo, and you know how far away the Moon is.</p>
+    </div>
+    <div class="beam">
+      <div class="stage" id="st-laser" aria-label="3D view of a laser pulse travelling from Earth to the Moon and back"></div>
+      <span class="hint">Earth and Moon sizes are to scale. The gap between them is not: 30 Earths would fit in it.</span>
+      <p class="no3d-note">3D is unavailable in this browser, but the timer still works.</p>
+    </div>
+    <div class="lab">
+      <div class="panel">
+        <fieldset>
+          <legend>Aim at a mirror</legend>
+          <div class="opts" id="mirror-opts"></div>
+        </fieldset>
+        <div>
+          <label for="orbit">Where is the Moon in its orbit today?</label>
+          <input type="range" id="orbit" min="0" max="100" value="50">
+          <div class="ends"><span>Closest to Earth</span><span>Farthest</span></div>
+        </div>
+        <div class="row"><button class="btn" id="fire">Fire the laser</button><span class="quiet" id="fire-note">The pulse travels in real time.</span></div>
+        <div class="readout" id="readout" aria-live="polite">
+          <span class="quiet">Echo time</span>
+          <span class="big" id="echo">0.000 s</span>
+          <span id="dist" class="quiet">Distance = speed of light × time ÷ 2</span>
+        </div>
+      </div>
+      <ul class="mirror-facts">
+        <li>The Apollo 11 and Apollo 14 mirrors have 100 prisms each. Apollo 15's has 300.</li>
+        <li>Timing the echo gives the distance to within about a millimeter.</li>
+        <li>The measurements show the Moon drifts 3.8 cm farther from Earth every year. That is about how fast your fingernails grow.</li>
+        <li>In 2025 the Blue Ghost lander delivered a new NASA mirror, and it has already returned laser light.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="mars" class="world" data-say="mars">
+  <div class="inner">
+    <div class="head">
+      <p class="fileno">Cabinet M: Mars</p>
+      <h2>A whole planet where every resident is a robot</h2>
+      <p class="lede">Two of these machines are still driving today. The rest are parked for good. Drag the planet and open their files.</p>
+    </div>
+    <p class="no3d-note">This browser could not start 3D graphics, so the globe is hidden. Every file is still in the list below.</p>
+    <div class="world-grid">
+      <div class="picker">
+        <div class="filters" data-world="mars" role="group" aria-label="Filter Mars files"></div>
+        <ol class="caselist" data-world="mars"></ol>
+      </div>
+      <div class="stage grab" id="st-mars" aria-label="3D globe of Mars with a light at each hardware site"><div class="mission" id="mis-mars" aria-live="polite"></div><div class="tip"></div><div class="pinlabel"></div><span class="hint">Drag to turn</span></div>
+      <article class="file" id="file-mars" aria-live="polite"></article>
+    </div>
+    <p class="leftovers">Not everything on Mars has a file. Each landing also left the gear that got it down safely: heat shields, parachutes, airbags and, for the two biggest rovers, a rocket-powered sky crane that flew off and crashed at a safe distance. Perseverance has also set ten sealed sample tubes on the ground as a backup supply for a future pickup.</p>
+  </div>
+</section>
+
+<section id="models" data-say="models">
+  <div class="inner">
+    <div class="head">
+      <p class="fileno">Evidence room</p>
+      <h2>Pick it up and turn it over</h2>
+      <p class="lede">These are NASA's own 3D models of the real spacecraft. Drag to spin them and look underneath.</p>
+    </div>
+    <p class="no3d-note">This browser could not start 3D graphics, so the models are hidden.</p>
+    <div class="hangar">
+      <div>
+        <div class="tabs" id="model-tabs" role="tablist" aria-label="Spacecraft"></div>
+        <div class="modelnote" id="model-note"></div>
+      </div>
+      <div class="stage grab" id="st-model" aria-label="3D model viewer"><div class="loading" id="model-loading">Fetching the evidence…</div><span class="hint">Drag to spin</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="overtime" data-say="overtime">
+  <div class="inner">
+    <div class="head">
+      <p class="fileno">Pattern in the evidence</p>
+      <h2>They were only supposed to last a few weeks</h2>
+      <p class="lede">Engineers promise a short mission and build the machine to survive it. Then it keeps going. Each bar shows how many times longer than planned.</p>
+    </div>
+    <div class="over" id="over"></div>
+  </div>
+</section>
+
+<section id="ask" data-say="ask">
+  <div class="inner">
+    <div class="head">
+      <video class="aistar" id="aistar" muted loop playsinline aria-hidden="true"></video>
+      <p class="fileno">The detective is in</p>
+      <h2>Don't just ask. Go on a mission with Hy.</h2>
+      <p class="lede">Hy talks, listens and takes you places. Ask him something and watch the globes move, or pick a mission.</p>
+    </div>
+    <div class="missions">
+      <div class="mcard">
+        <h3>Mystery machine</h3>
+        <p>Hy is thinking of one machine. You get three clues. Find it on the globe and click its light.</p>
+        <div class="row"><button class="btn" id="m-mystery">Start a mystery</button></div>
+      </div>
+      <div class="mcard">
+        <h3>Interview a machine</h3>
+        <p>Ever wanted to ask a Mars rover how its day went? Pick one and it answers for itself.</p>
+        <div class="row"><label class="sr" for="m-who">Machine to interview</label><select id="m-who"></select><button class="btn" id="m-interview">Start the interview</button></div>
+      </div>
+      <div class="mcard">
+        <h3>Ride along</h3>
+        <p>Sit back. Hy flies you from site to site and tells the story out loud.</p>
+        <div class="row"><button class="btn" data-tour="moon">Moon tour</button><button class="btn" data-tour="mars">Mars tour</button></div>
+      </div>
+      <div class="mcard">
+        <h3>Talk to Hy</h3>
+        <form class="askbox" id="ask-form">
+          <label class="sr" for="ask-q">Your question</label>
+          <input type="text" id="ask-q" placeholder="Why did Opportunity stop working?" autocomplete="off" maxlength="300">
+          <button class="btn" type="submit">Ask</button>
+        </form>
+        <div class="qs" id="ask-qs"></div>
+        <p class="quiet" id="ask-mode"></p>
+      </div>
+    </div>
+    <div class="notebook">
+      <h3>Your detective notebook</h3>
+      <p class="quiet" id="nb-count"></p>
+      <div class="stamps" id="nb-stamps" aria-hidden="true"></div>
+      <ul class="badges" id="nb-badges"></ul>
+    </div>
+  </div>
+</section>
+
+<section id="quiz" data-say="quiz">
+  <div class="inner">
+    <div class="head">
+      <p class="fileno">Close the case</p>
+      <h2>Six questions before you get your badge</h2>
+    </div>
+    <div class="quiz" id="quiz-box"></div>
+  </div>
+</section>
+
+<section id="sources" data-say="sources">
+  <div class="inner">
+    <div class="head">
+      <p class="fileno">Evidence log</p>
+      <h2>Where every fact came from</h2>
+      <p class="lede">A good detective shows the evidence. Status information was checked in November 2026.</p>
+    </div>
+    <div class="srcgrid" id="srcgrid"></div>
+    <div class="about">
+      <img src="assets/logo-full.jpg" alt="Quantumers team logo: an atom wearing a black fedora.">
+      <dl>
+        <dt>Project</dt><dd>The Left Behind Files</dd>
+        <dt>Challenge</dt><dd>NASA Space Apps Challenge: tell the story of the hardware NASA has left across the solar system, for school-age space enthusiasts.</dd>
+        <dt>Team</dt><dd>Quantumers. Kien Do, Vietnam (team owner). Making space easy and fun for kids.</dd>
+        <dt>The problem</dt><dd>Sixty years of machines sit on the Moon and Mars, and most students have never heard what they are, where they are, or what they taught us.</dd>
+        <dt>Our solution</dt><dd>A detective story with real NASA coordinates on 3D globes, NASA's 3D spacecraft models, a laser experiment, and Hy, an animated hydrogen atom guide who answers questions with AI.</dd>
+        <dt>How it was made</dt><dd>We are hoping to make learning about space easy and fun for children. This website was built with the help of Claude.</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>The Left Behind Files. Spacecraft models, the Mars map and the star map are from NASA 3D Resources. This site is a student project and is not an official NASA website.</footer>
+
+<div id="guide">
+  <button id="guide-btn" aria-label="Hy, your guide. Open the question box."><img src="assets/buddy.jpg" alt=""></button>
+  <div id="bubble" role="status">
+    <p id="say"></p>
+    <div class="row"><button id="bubble-ask">Talk to me</button><button id="bubble-voice">Turn on my voice</button><button class="x" id="bubble-x" aria-label="Send the guide away">Hide</button></div>
+  </div>
+</div>
+<button id="guide-show" hidden>Bring Hy back</button>
+
+<div id="trailer" role="dialog" aria-label="Trailer"><div class="box"><button class="btn ghost" id="trailer-x">Close</button><video id="trailer-v" controls playsinline poster="assets/intro.jpg"></video></div></div>
+
+<aside id="chat" aria-label="Ask Detective Hy">
+  <header><h2 id="chat-title">Talk to Hy</h2><span class="mode" id="mode">Checking…</span><button class="back" id="chat-back">Back to Hy</button><button id="chat-x" aria-label="Close the question box">Close</button></header>
+  <div id="log" aria-live="polite"></div>
+  <div class="qs" id="chat-qs"></div>
+  <form id="chat-form"><label class="sr" for="chat-q">Your question</label><input type="text" id="chat-q" placeholder="Ask about any machine" autocomplete="off" maxlength="300"><button class="btn onpaper ghost" type="button" id="mic" aria-label="Talk to Hy with your microphone">Talk</button><button class="btn onpaper" type="submit">Send</button></form>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="data.js"></script>
+<script src="media.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
