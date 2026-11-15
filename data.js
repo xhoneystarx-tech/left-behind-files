@@ -575,7 +575,7 @@ LBF.FINALE = {
     ["Made for", ["NASA Space Apps Challenge"]],
     ["Facts, maps and 3D models", ["NASA", "NASA Science and JPL", "NASA 3D Resources"]],
     ["Still up there", ["Apollo 15 laser mirror", "Apollo 17 Moon car", "Surveyor 3", "LCROSS", "Perseverance", "Curiosity", "Ingenuity"]],
-    ["Music", ["Luke Bergs: Aurora", "Nebulite: Feel Alive", "Nebulite: Memories", "Spiring: Late Night", "tubebackr: Falling", "from freetouse.com"]],
+    ["Music", ["Luke Bergs: Aurora", "Nebulite: Feel Alive", "Nebulite: Memories", "Spiring: Late Night", "tubebackr: Falling", "from freetouse.com", "Space mix: supplied by the team"]],
     ["Hy's voice", ["Made with ElevenLabs"]],
     ["Built with the help of", ["Claude"]],
     ["", ["A student project.", "Not an official NASA website."]]

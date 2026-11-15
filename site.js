@@ -55,8 +55,8 @@ const Sfx = (function () {
 })();
 /* background music: a quiet playlist for the whole site, with its own track for the Moon walk */
 const Music = (function () {
-  const LIST = ['music', 'm-feelalive', 'm-memories', 'm-latenight', 'm-falling'], a = new Audio(); a.preload = 'none';
-  let on = true, started = false, i = Math.floor(Math.random() * LIST.length), special = null;
+  const LIST = ['m-hour-page', 'music', 'm-feelalive', 'm-memories', 'm-latenight', 'm-falling', 'm-aurora'], a = new Audio(); a.preload = 'none';
+  let on = true, started = false, i = 0, special = null;
   const btn = document.getElementById('music');
   const load = () => { a.src = 'audio/' + (special || LIST[i % LIST.length]) + '.mp3'; a.loop = !!special; };
   const play = () => { if (!on || !started) return; if (!a.src) load(); a.play().catch(() => {}); };
@@ -136,7 +136,7 @@ const Voice = (function () {
       } catch (e) { guideState.voice = 0; res(false); }
     });
   }
-  return { ok: true, isOn: () => on, set(v) { on = !!v; if (!on) stop(); }, speak, stop, clip };
+  return { ok: true, isOn: () => on, set(v) { on = !!v; if (!on) stop(); }, speak, stop, clip, has: t => !!CLIPS[t] };
 })();
 function setVoice(v) {
   Voice.set(v);
@@ -1072,7 +1072,7 @@ function init3D() {
     function start() {
       reset(); active = true; box.hidden = false; document.body.classList.add('questing'); Missions.stopAll && Missions.stopAll();
       say('Find all four. Remember them. I will ask.', true); Help.fresh('q1:');
-      soundOn = Music.isOn(); soundBtn.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); Music.scene('m-aurora');
+      soundOn = Music.isOn(); soundBtn.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); Music.scene('m-hour-q1');
     }
     function stop() { Music.scene(null); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
     LBF.walk = { start, stop, quiz(ids) { learned = ids; debrief(0, 0); }, warp(v) { pos.copy(typeof v === 'number' ? rocks[v].d : sites.find(x => x.c.id === v).dir); headDir.addScaledVector(pos, -headDir.dot(pos)).normalize(); } };
@@ -1843,7 +1843,7 @@ function init3D() {
     }
     function start() {
       reset(); active = true; finished = false; box.hidden = false; document.body.classList.add('questing'); if (Missions.stopAll) Missions.stopAll();
-      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-feelalive'); Help.fresh('q2:'); go('aim');
+      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-hour-q2'); Help.fresh('q2:'); go('aim');
     }
     function stop() { Music.scene(null); Sfx.set(true); active = false; box.hidden = true; document.body.classList.remove('questing'); for (const k in keys) keys[k] = 0; }
     function leave(to) { stop(); setTimeout(() => { const t = $(to); if (t) t.scrollIntoView({ behavior: 'auto', block: 'start' }); }, 80); }
@@ -2819,7 +2819,7 @@ function init3D() {
     function chapter(n) { S.ch = n; keep(n); for (let i = 0; i < n; i++) stepDone(STEPS[i][0]); go(CHAPS[n]); }
     function start() {
       reset(); active = true; finished = false; box.hidden = false; document.body.classList.add('questing'); if (Missions.stopAll) Missions.stopAll();
-      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-memories'); Help.fresh('q3:');
+      soundBtn.textContent = 'Sound: ' + (Music.isOn() ? 'on' : 'off'); Sfx.set(Music.isOn()); Music.scene('m-hour-q3'); Help.fresh('q3:');
       const n = clamp(resume, 0, 2);
       chapter(n);
     }
@@ -2964,6 +2964,8 @@ const Notebook = (function () {
 /* ───────────────────────── Missions: mystery machine and the ride-along tour, both on the Moon ───────────────────────── */
 const Missions = (function () {
   let mystery = null, tour = null;
+  const MYST = { start: "I'm thinking of one machine on the Moon. Read the clue, then click its light on the globe.", next: 'Here is another clue.', same: 'Not that one. Ours arrived in the same year. Try another light.', earlier: 'Not that one. Ours arrived earlier. Try another light.', later: 'Not that one. Ours arrived later. Try another light.', won: 'You cracked it! Fine detective work, partner.', lost: 'A tough one. Read the file, then try another.' };
+  const tourLine = (c, i) => (i === 0 ? 'Buckle up. First stop: ' : 'Next stop: ') + c.name + '. ' + c.story + ' ' + c.clue;
   const ban = w => $('#mis-' + w);
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const reveal = w => $('#' + w).scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' });
@@ -2993,7 +2995,7 @@ const Missions = (function () {
   function showClue() {
     const c = byId[mystery.id];
     banner(c.world, 'Mystery machine: clue ' + (mystery.clue + 1) + ' of 3', mystery.clues[mystery.clue] + (mystery.hint ? ' ' + mystery.hint : ''), [
-      mystery.clue < 2 ? ['Next clue', () => { mystery.clue++; mystery.hint = ''; showClue(); say(mystery.clues[mystery.clue], true); }] : null,
+      mystery.clue < 2 ? ['Next clue', () => { mystery.clue++; mystery.hint = ''; showClue(); say(MYST.next, true); }] : null,
       ['Ask Hy yes or no', () => startMode({ type: 'mystery', id: c.id }), true],
       ['Give up', () => endMystery(false), true]
     ]);
@@ -3003,7 +3005,7 @@ const Missions = (function () {
     const pool = C.filter(c => c.world === 'moon' && c.status !== 'lost'), c = pool[Math.floor(Math.random() * pool.length)];
     mystery = { id: c.id, clue: 0, tries: 0, hint: '', clues: clues(c) };
     reveal(c.world); showClue();
-    say("I'm thinking of one machine on " + WORLD_NAME[c.world] + ". " + mystery.clues[0] + " Click its light on the globe when you think you've found it.", true);
+    say(MYST.start, true);
   }
   function guess(c) {
     const t = byId[mystery.id];
@@ -3012,7 +3014,7 @@ const Missions = (function () {
     mystery.hint = 'Not ' + c.name + '. Our machine arrived ' + (c.year === t.year ? 'in the same year' : t.year < c.year ? 'earlier than that' : 'later than that') + '.';
     if (mystery.tries >= 6) return endMystery(false);
     if (mystery.tries % 2 === 0 && mystery.clue < 2) mystery.clue++;
-    showClue(); say(mystery.hint + ' Try another light.', true);
+    showClue(); say(c.year === t.year ? MYST.same : t.year < c.year ? MYST.earlier : MYST.later, true);
   }
   function endMystery(won) {
     const c = byId[mystery.id]; mystery = null;
@@ -3020,7 +3022,7 @@ const Missions = (function () {
     openCase(c.id, { quiet: true });
     banner(c.world, won ? 'Case cracked' : 'Case file revealed', (won ? 'You found it: ' : 'It was ') + c.name + '. Its file is open.', [['Play again', startMystery], ['Close', clear, true]]);
     if (won) Notebook.badge('mystery');
-    say(won ? "You cracked it! That's " + c.name + '. Fine detective work, partner.' : 'It was ' + c.name + '. A tough one. Read the file, then try another.', true);
+    say(won ? MYST.won : MYST.lost, true);
   }
 
   /* --- ride-along tour --- */
@@ -3033,7 +3035,7 @@ const Missions = (function () {
       const c = byId[stops[i]];
       openCase(c.id, { quiet: true });
       banner(w, 'Ride along: stop ' + (i + 1) + ' of ' + stops.length, c.name + ', ' + c.year + '. ' + c.site + '.', [['Next stop', () => run.skip && run.skip()], ['End the tour', stopTour, true]]);
-      const line = (i === 0 ? 'Buckle up. First stop: ' : 'Next stop: ') + c.name + '. ' + c.story + ' ' + c.clue;
+      const line = tourLine(c, i);
       const told = Voice.isOn() ? Promise.race([say(line, true).then(() => wait(900)), wait(5000 + line.length * 95)]) : (say(line, true), wait(2600 + line.length * 55));
       await Promise.race([told, new Promise(r => { run.skip = r; })]);
       Voice.stop();
@@ -3048,7 +3050,7 @@ const Missions = (function () {
   /* Hy watches the mystery too: stuck on one clue for ten seconds, and he explains what to do */
   PARTS.push(() => mystery && !chatMode && inView($('#st-moon')) ? ['mystery', mystery.clue * 10 + mystery.tries] : null);
   return {
-    startMystery, startTour, stopAll,
+    startMystery, startTour, stopAll, lines: () => Object.values(MYST).concat(TOURS.moon.map((id, i) => tourLine(byId[id], i)), ["That's the tour. Now go poke around yourself. Every light has a story."]),
     /* a click on a light or a list entry: a guess during a mystery, and it ends a running tour */
     intercept(c) { if (mystery) { guess(c); return true; } if (tour) stopTour(); return false; }
   };
@@ -3259,6 +3261,16 @@ async function ask(q) {
   Voice.speak(r.text, who ? { pitch: 0.8, rate: 0.98 } : undefined);
 }
 LBF.ask = ask;
+/* everything Hy can say that is fixed text: used to list the lines that still need a recording */
+LBF.script = () => {
+  const out = ["Voice on. Now I can talk you through the files, partner.", "Pull up a chair, kid. Tap a question and I'll answer. Some answers take you places.", "Tap a yes-or-no question about the mystery machine. I won't say its name.", 'Good eye, detective.', 'A perfect score. You could run this agency, kid.', 'Case closed. You earned your badge, partner.', 'I lost my train of thought. Tap a question again?', 'Tap one of the questions below, partner.'];
+  Object.values(QUIPS).forEach(t => out.push(t));
+  Missions.lines().forEach(t => out.push(t));
+  PROMPTS.filter(q => q !== NOW).forEach(q => out.push(offlineAnswer(q).text));
+  out.push(offlineAnswer('zzz').text);
+  C.filter(c => c.world === 'moon' && c.id !== 'mpl').forEach(c => { YESNO.forEach(q => out.push(yesNo(c, q))); out.push(offlineAnswer('Tell me more about ' + c.name + '.').text); });
+  return [...new Set(out)].map(t => [t, Voice.has(t)]);
+};
 
 /* Answers built from the case files, used when live AI is not available. Every question on Hy's list has one. */
 function offlineAnswer(q) {
@@ -3419,7 +3431,7 @@ const Finale = (function () {
     if (on) return; on = true; clearAll(); resetLook();
     closeChat(); Missions.stopAll(); Voice.stop();
     document.body.classList.add('questing', 'finale-on'); box.hidden = false;
-    Music.scene('m-falling'); if (LBF.finale3d) LBF.finale3d.start();
+    Music.scene('m-hour-end'); if (LBF.finale3d) LBF.finale3d.start();
     try { localStorage.setItem('lbf-finale', '1'); } catch (_) {}
     if (RM) return still();
     load().then(() => { if (on) scene(); });
