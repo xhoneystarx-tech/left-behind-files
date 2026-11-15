@@ -799,6 +799,21 @@ body.no3d #finale{animation:none;background:#000}
 @media (max-width:760px){
   #fin-medal.pin{left:calc(14px + 30px);top:calc(var(--bar) + 12px + 38px);width:60px}
 }
+main > section.gated,footer.gated{display:none}
+.questsec:not(.cleared) a.next{display:none}
+.bar nav a.shut{opacity:.38}
+/* the ending, second cut: Mars, the flight to Earth, a child's room, and back out to space */
+#fin-room{position:absolute;inset:0;opacity:0;transform:scale(.04);transform-origin:50% 46%;pointer-events:none}
+#fin-room svg{display:block;width:100%;height:100%}
+#fin-room.in{opacity:1;transform:none;transition:transform 1.5s cubic-bezier(.16,.8,.2,1),opacity .5s}
+#fin-room.out{opacity:0;transform:scale(.02);transition:transform 1.6s cubic-bezier(.7,0,.9,.4),opacity .5s 1.1s}
+#fin-hy.dip{opacity:0;scale:.2;transition:scale .35s ease-in,opacity .3s}
+#fin-hy.fly .bob{animation:fin-fly .9s ease-in-out infinite}
+#fin-hy.fly::before{content:"";position:absolute;left:8%;right:52%;top:44%;height:12%;border-radius:50%;background:linear-gradient(90deg,transparent,rgba(255,170,80,.55));filter:blur(8px);transform:rotate(-8deg)}
+@keyframes fin-fly{0%,100%{transform:translate(-2%,1.5%) rotate(-3deg)}50%{transform:translate(2%,-1.5%) rotate(3deg)}}
+#fin-fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .9s}
+#fin-fade.on{opacity:1}
+#finale.still #fin-room,#finale.still #fin-fade{display:none}
 /* v3 css end */
 </style>
 </head>
@@ -823,6 +838,7 @@ body.no3d #finale{animation:none;background:#000}
     <a href="#models">4 Hold one</a>
     <a href="#ask">5 Play</a>
     <a href="#quiz">6 Badge</a>
+    <a href="#sources">Sources</a>
   </nav>
   <button class="toggle" id="music" aria-pressed="true">Music on</button>
   <button class="toggle" id="sound" aria-pressed="false">Voice off</button>
@@ -1108,6 +1124,41 @@ body.no3d #finale{animation:none;background:#000}
 <!-- finale begin -->
 <div id="finale" hidden aria-label="The ending">
   <div id="fin-stage"></div>
+  <div id="fin-room" aria-hidden="true">
+    <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <radialGradient id="fr-glow" cx="50%" cy="42%" r="60%"><stop offset="0" stop-color="#3b4a78" stop-opacity=".75"/><stop offset="1" stop-color="#0c0e17" stop-opacity="0"/></radialGradient>
+        <linearGradient id="fr-wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#151827"/><stop offset="1" stop-color="#0b0c13"/></linearGradient>
+      </defs>
+      <rect width="1600" height="900" fill="url(#fr-wall)"/>
+      <!-- the window: night sky, and a small red dot that is Mars -->
+      <rect x="110" y="120" width="300" height="360" rx="10" fill="#05060c" stroke="#2c3350" stroke-width="10"/>
+      <path d="M260 120v360M110 300h300" stroke="#2c3350" stroke-width="8"/>
+      <g fill="#fff"><circle cx="160" cy="170" r="2.500"/><circle cx="215" cy="240" r="1.800"/><circle cx="330" cy="190" r="2.200"/><circle cx="370" cy="270" r="1.600"/><circle cx="180" cy="390" r="2"/><circle cx="300" cy="420" r="1.700"/><circle cx="350" cy="360" r="2.300"/></g>
+      <circle cx="205" cy="345" r="6" fill="#e0703a"/>
+      <!-- a rocket poster and a shelf -->
+      <rect x="1230" y="130" width="210" height="280" rx="6" fill="#1b2036" stroke="#2c3350" stroke-width="6"/>
+      <path d="M1335 180c34 40 34 104 0 150c-34-46-34-110 0-150z" fill="#d9d5c8"/><circle cx="1335" cy="250" r="14" fill="#58d7e6"/><path d="M1312 318l-22 34 30-12zM1358 318l22 34-30-12z" fill="#ff9a3d"/>
+      <rect width="1600" height="900" fill="url(#fr-glow)"/>
+      <!-- the computer, showing this website -->
+      <rect x="470" y="150" width="660" height="400" rx="18" fill="#0d0f18" stroke="#3a4266" stroke-width="12"/>
+      <rect x="494" y="174" width="612" height="352" rx="6" fill="#02030a"/>
+      <circle cx="960" cy="400" r="150" fill="#8d8f96"/><circle cx="915" cy="360" r="26" fill="#74767d"/><circle cx="1010" cy="430" r="38" fill="#7b7d84"/><circle cx="930" cy="470" r="18" fill="#74767d"/>
+      <rect x="494" y="174" width="612" height="352" rx="6" fill="none" stroke="#02030a" stroke-width="2"/>
+      <path d="M1106 250v276H810a150 150 0 0 0 296-276z" fill="#02030a" opacity="0"/>
+      <text x="530" y="262" font-family="Special Elite, monospace" font-size="50" fill="#ece8dc">The Left</text>
+      <text x="530" y="318" font-family="Special Elite, monospace" font-size="50" fill="#ece8dc">Behind Files</text>
+      <rect x="530" y="352" width="120" height="40" rx="5" fill="#ece8dc"/>
+      <path d="M740 550h120l24 70H716z" fill="#262b45"/><rect x="640" y="618" width="320" height="16" rx="8" fill="#30365a"/>
+      <!-- the desk -->
+      <rect x="0" y="634" width="1600" height="266" fill="#1a1410"/><rect x="0" y="634" width="1600" height="12" fill="#3a2b20"/>
+      <!-- the child, seen from behind, hands up for the medal -->
+      <path d="M560 900c0-110 90-170 240-170s240 60 240 170z" fill="#2a3f6e"/>
+      <circle cx="800" cy="722" r="92" fill="#3b2a20"/><path d="M708 722a92 92 0 0 1 184 0c-30-34-64-50-92-50s-62 16-92 50z" fill="#241811"/>
+      <path d="M612 800c-26-60-20-120 18-170l34 22c-20 44-18 84 8 124z" fill="#2a3f6e"/><circle cx="640" cy="622" r="30" fill="#c98f6b"/>
+      <path d="M988 800c26-60 20-120-18-170l-34 22c20 44 18 84-8 124z" fill="#2a3f6e"/><circle cx="960" cy="622" r="30" fill="#c98f6b"/>
+    </svg>
+  </div>
   <div id="fin-star" aria-hidden="true"></div>
   <div id="fin-hy" aria-hidden="true"><div class="bob"></div></div>
   <div id="fin-medal" hidden>
@@ -1136,6 +1187,7 @@ body.no3d #finale{animation:none;background:#000}
   </div>
   <i class="fin-bar top" aria-hidden="true"></i><i class="fin-bar bot" aria-hidden="true"></i>
   <div id="fin-flash" aria-hidden="true"></div>
+  <div id="fin-fade" aria-hidden="true"></div>
   <button class="btn ghost" id="fin-skip">Skip</button>
 </div>
 <!-- finale end -->

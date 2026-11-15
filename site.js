@@ -2853,28 +2853,29 @@ function init3D() {
   })(); } catch (err) { console.warn('Quest 3 is unavailable:', err); }
   /* ══ Quest 3 end ══ */
   /* ══ Finale begin ══ */
-  /* The backdrop of the ending: the Moon and Mars, the two worlds of the six quests, hanging in space while Hy says goodbye. */
+  /* The backdrop of the ending: Mars, then the long flight to Earth, then Earth falling away again. */
   (function () {
     const stage = $('#fin-stage'); if (!stage) return;
-    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
-    const moon = new THREE.Mesh(new THREE.SphereGeometry(3.4, 96, 64), globeMat(moonTex)), mars = new THREE.Mesh(new THREE.SphereGeometry(1.7, 64, 48), globeMat(marsTex, 0xffe9dc));
-    const sun = new THREE.DirectionalLight(0xfff4e6, 1.8); sun.position.set(-3, 2.2, 4);
-    const rim = new THREE.DirectionalLight(0x8fb4ff, 0.25); rim.position.set(4, -1, -3);
-    scene.add(moon, mars, sun, rim, new THREE.AmbientLight(0xffffff, 0.05));
-    moon.rotation.set(0.1, -1.4, 0); mars.rotation.set(0.3, 2.4, 0);
-    const look = new THREE.Vector3(), ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x); let t = 0, on = false, goT = -1;
+    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(38, 1, 0.1, 600);
+    const mars = new THREE.Mesh(new THREE.SphereGeometry(2, 96, 64), globeMat(marsTex, 0xffe9dc)), earth = new THREE.Mesh(new THREE.SphereGeometry(2.3, 96, 64), globeMat(tex('earth.jpg')));
+    const E = new THREE.Vector3(0, 0, -150); earth.position.copy(E); earth.rotation.set(0.35, 3.6, 0); mars.rotation.set(0.3, 2.4, 0);
+    const sun = new THREE.DirectionalLight(0xfff4e6, 1.9); sun.position.set(-4, 2, 3);
+    scene.add(mars, earth, sun, new THREE.AmbientLight(0xffffff, 0.07));
+    const look = new THREE.Vector3(), ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x); let t = 0, on = false, flyT = -1, outT = -1, last = 0;
     views.push({ el: stage, scene, cam, quest: true, update(dt, a) {
-      if (!on) return; t += dt; if (goT >= 0) goT += dt;
-      const wide = a > 1;
-      moon.position.set(wide ? -6.4 : -2.3, wide ? -3.6 : -7.2, 0); mars.position.set(wide ? 7.2 : 2.6, wide ? 3.4 : 6.6, -9);
-      if (!RM) { moon.rotation.y += dt * 0.02; mars.rotation.y += dt * 0.05; }
-      /* a slow push in; when Hy leaves, the camera tilts up after him until both worlds are gone, and then keeps drifting */
-      const push = ease(t / 9), lift = goT < 0 ? 0 : ease(goT / 2.6) + Math.max(0, goT - 2.6) * 0.008;
-      cam.position.set(Math.sin(t * 0.12) * 0.35, 0.2 * push, 15 - 1.6 * push);
-      look.set(lift * 3, lift * 27, -20 * Math.min(1, lift)); cam.lookAt(look);
-      skyAdd.x = cam.rotation.x * 0.9; skyAdd.y = cam.rotation.y * 0.9 + t * 0.004;
+      if (!on) return;
+      const now = performance.now(); dt = Math.max(dt, Math.min(0.25, (now - last) / 1000)); last = now;      /* real seconds, so a slow device keeps pace with Hy and the captions */
+      t += dt; if (flyT >= 0) flyT += dt; if (outT >= 0) outT += dt;
+      const wide = a > 1, side = wide ? 2.6 : 0.6, low = wide ? 1.1 : 2.6;          /* Mars sits low and to the left of Hy; Earth arrives dead ahead */
+      if (!RM) { mars.rotation.y += dt * 0.04; earth.rotation.y += dt * 0.03; }
+      const u = ease(flyT / 7.2), dive = ease((flyT - 7.2) / 1.6), back = outT < 0 ? 0 : outT * outT * 9;
+      /* before the flight: close to Mars. During it: an arc past Mars and across to Earth. Then a dive at the night side, and at the end a long pull back. */
+      cam.position.set(side * (1 - u) + Math.sin(u * Math.PI) * 5, low * (1 - u) + Math.sin(t * 0.3) * 0.08, 7.5 - u * (7.5 + 150 - 8.5) - dive * 5 + back);
+      look.set(0, 0, 0).lerp(E, ease(u * 2.2)); cam.lookAt(look);
+      cam.fov = 38 + Math.sin(u * Math.PI) * 16; cam.updateProjectionMatrix();          /* the view widens at full speed, so the stars seem to rush */
+      skyAdd.y = u * 1.4 + t * 0.004; skyAdd.x = Math.sin(u * Math.PI) * 0.25 - back * 0.004;
     } });
-    LBF.finale3d = { start() { t = 0; goT = -1; on = true; }, depart() { goT = 0; }, stop() { on = false; skyAdd.x = skyAdd.y = 0; } };
+    LBF.finale3d = { start() { t = 0; flyT = outT = -1; on = true; }, fly() { flyT = 0; }, out() { if (flyT < 0) flyT = 99; if (outT < 0) outT = 0; }, stop() { on = false; skyAdd.x = skyAdd.y = 0; } };
   })();
   /* ══ Finale end ══ */
   /* render loop: one canvas, one viewport per stage */
@@ -2918,7 +2919,7 @@ const Notebook = (function () {
   const save = () => {};
   const done = i => st.skipped.includes(i) || QUESTS[i][1].some(b => st.badges.includes(b));
   const left = () => QUESTS.map((q, i) => i).filter(i => !done(i));
-  let toastT = null, onAll = null;
+  let toastT = null, onAll = null, srcOpen = false;
   function toast(text) {
     let t = $('#toast');
     if (!t) { t = el('div', { id: 'toast', role: 'status', style: 'position:fixed;left:14px;bottom:14px;z-index:50;background:#ff9a3d;color:#17171a;font-family:var(--display);padding:10px 14px 8px;border-radius:3px;box-shadow:0 10px 40px rgba(0,0,0,.7);max-width:calc(100vw - 28px)' }); document.body.append(t); }
@@ -2929,6 +2930,11 @@ const Notebook = (function () {
     $('#nb-stamps').replaceChildren(...FILES.map(c => el('i', { class: 's-' + c.status + (st.files.includes(c.id) ? ' got' : ''), title: c.name })));
     $('#nb-badges').replaceChildren(...Object.keys(BADGES).map(k => el('li', { class: st.badges.includes(k) ? 'got' : '', text: BADGES[k] })));
     $$('.bar nav a').forEach(a => { const i = QUESTS.findIndex(q => q[0] === a.getAttribute('href')); if (i >= 0) a.classList.toggle('done', done(i)); });
+    /* the gate: the page ends at the first quest that is not done yet, so nobody scrolls past a puzzle */
+    const first = left().length ? left()[0] : 6;
+    QUESTS.forEach((q, i) => { const sec = $(q[0]); sec.classList.add('questsec'); sec.classList.toggle('gated', i > first); sec.classList.toggle('cleared', done(i)); });
+    $$('.bar nav a').forEach(a => { const i = QUESTS.findIndex(q => q[0] === a.getAttribute('href')); if (i >= 0) a.classList.toggle('shut', i > first); });
+    [$('#sources'), $('footer')].forEach(e => e && e.classList.toggle('gated', first < 6 && !srcOpen));
     const n = left().length, note = $('#fin-left'), open = $('#fin-open');
     if (note) note.textContent = n ? (6 - n) + ' of 6 quests done. Finish all six to see the ending.' : 'All six quests done.';
     if (open) open.hidden = n > 0;
@@ -2952,7 +2958,7 @@ const Notebook = (function () {
     if (FILES.every(c => st.files.includes(c.id))) badge('moon');
   }
   render();
-  return { badge, file, skip, left, where: i => QUESTS[i][0], whenAll(fn) { onAll = fn; } };
+  return { badge, file, skip, left, where: i => QUESTS[i][0], whenAll(fn) { onAll = fn; }, showSources() { srcOpen = true; render(); } };
 })();
 
 /* ───────────────────────── Missions: mystery machine and the ride-along tour, both on the Moon ───────────────────────── */
@@ -3142,7 +3148,15 @@ function parseReply(raw) {
   }).replace(/\[\[[^\]]*\]\]/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   return r;
 }
-const goTo = id => () => { const t = $(document.body.classList.contains('locked') ? '#story' : id); if (t) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' }); };
+const goTo = id => () => {                       /* a stop behind the gate sends the child to the quest that opens it */
+  let t = $(document.body.classList.contains('locked') ? '#story' : id);
+  if (t && t.classList.contains('gated')) t = $(Notebook.where(Notebook.left()[0]));
+  if (t) t.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' });
+};
+$$('.bar nav a').forEach(a => a.addEventListener('click', e => {
+  const id = a.getAttribute('href'); if (id === '#sources') Notebook.showSources();
+  const t = $(id); if (t && t.classList.contains('gated')) { e.preventDefault(); goTo(id)(); }
+}));
 const DO = {
   laser: ['Try the laser quest', goTo('#mirrors')],
   mystery: ['Play mystery machine', () => Missions.startMystery()],
@@ -3328,15 +3342,15 @@ setInterval(() => {
    wishes the child luck and flies off into the stars. Then the credits roll. */
 const Finale = (function () {
   const box = $('#finale'), F = LBF.FINALE; if (!box || !F) return { play() {}, queue() {} };
-  const hy = $('#fin-hy'), lineEl = $('#fin-line'), medal = $('#fin-medal'), star = $('#fin-star'), credits = $('#fin-credits'), roll = $('#fin-roll'), endEl = $('#fin-end'), skip = $('#fin-skip'), flashEl = $('#fin-flash');
+  const hy = $('#fin-hy'), lineEl = $('#fin-line'), medal = $('#fin-medal'), star = $('#fin-star'), credits = $('#fin-credits'), roll = $('#fin-roll'), endEl = $('#fin-end'), skip = $('#fin-skip'), flashEl = $('#fin-flash'), room = $('#fin-room'), fade = $('#fin-fade');
   const M = window.LBF_MEDIA || {}, vids = {};
   let on = false, timers = [], typing = null, rollAnim = null, ready = null;
   const at = (s, fn) => timers.push(setTimeout(() => { if (on) fn(); }, s * 1000));
   /* Hy's four clips, sharper than the little ones in the corner; each falls back to the small clip if its file is missing */
   function load() {
     if (ready) return ready;
-    ready = Promise.all(['appear', 'speaking', 'yes', 'disappear'].map(n => new Promise(res => {
-      const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true'); v.preload = 'auto'; v.loop = n === 'speaking';
+    ready = Promise.all(['appear', 'speaking', 'moving', 'yes', 'disappear'].map(n => new Promise(res => {
+      const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true'); v.preload = 'auto'; v.loop = n === 'speaking' || n === 'moving';
       let tried = false; const ok = () => res();
       v.addEventListener('canplaythrough', ok, { once: true });
       v.addEventListener('error', () => { if (!tried && M[n]) { tried = true; v.src = M[n]; } else ok(); });
@@ -3358,7 +3372,7 @@ const Finale = (function () {
   function flash() { flashEl.style.transition = 'none'; flashEl.style.opacity = 0.75; void flashEl.offsetWidth; flashEl.style.transition = 'opacity .5s ease-out'; flashEl.style.opacity = 0; }
   function clearAll() { timers.forEach(clearTimeout); timers = []; clearInterval(typing); if (rollAnim) { try { rollAnim.cancel(); } catch (_) {} rollAnim = null; } }
   function resetLook() {
-    box.className = ''; hy.className = ''; medal.className = ''; medal.hidden = true; star.className = ''; lineEl.textContent = ''; lineEl.classList.remove('out');
+    box.className = ''; hy.className = ''; medal.className = ''; medal.hidden = true; star.className = ''; room.className = ''; fade.className = ''; lineEl.textContent = ''; lineEl.classList.remove('out');
     credits.hidden = true; endEl.hidden = true; skip.hidden = false; roll.style.transform = '';
     for (const k in vids) { vids[k].classList.remove('on'); vids[k].pause(); }
   }
@@ -3373,31 +3387,40 @@ const Finale = (function () {
     rollAnim.onfinish = () => { if (on) end(); };
   }
   function end() {                                  /* the last card: thank you, and two buttons */
-    clearAll(); box.classList.add('go', 'done'); hy.className = 'gone'; medal.hidden = false; medal.classList.add('fly', 'landed', 'pin'); lineEl.textContent = ''; credits.hidden = true; endEl.hidden = false; skip.hidden = true;
+    clearAll(); box.classList.add('go', 'done'); hy.className = 'gone'; room.className = ''; fade.className = ''; if (LBF.finale3d) LBF.finale3d.out(); medal.hidden = false; medal.classList.add('fly', 'landed', 'pin'); lineEl.textContent = ''; credits.hidden = true; endEl.hidden = false; skip.hidden = true;
     Notebook.badge('medal'); const b = $('#fin-back'); if (b) try { b.focus({ preventScroll: true }); } catch (_) {}
   }
   function still() {                                /* for visitors who asked for less motion: the same words, the medal and the credits, standing still */
     box.classList.add('go', 'still'); medal.hidden = false; medal.classList.add('fly', 'landed'); lineEl.textContent = F.lines.join(' '); buildCredits(); credits.hidden = false; endEl.hidden = false; skip.hidden = true; Notebook.badge('medal');
   }
+  /* about 25 seconds: Mars, the flight to Earth, the child's room, the medal, and back out into space */
   function scene() {
     box.classList.add('go');                                            /* the black bars slide in: this is a film now */
-    at(0.5, () => { show('appear', 0.3); hy.classList.add('in'); Sfx.whoosh(); });
-    at(1.5, () => caption(F.lines[0]));
-    at(1.9, () => show('speaking'));
-    at(3.3, () => caption(F.lines[1]));
-    at(3.7, () => { show('yes'); medal.hidden = false; medal.classList.add('fly'); Sfx.tick(); });
-    at(5.0, () => { medal.classList.add('landed'); flash(); Sfx.win(); });
-    at(5.7, () => show('speaking'));
-    at(6.7, () => caption(F.lines[2]));
-    at(8.5, () => { show('disappear', 2.0); hy.classList.add('away'); if (LBF.finale3d) LBF.finale3d.depart(); Sfx.whoosh(); });
-    at(9.75, () => { star.classList.add('on'); Sfx.ping(); });
-    at(10.2, rollCredits);
+    at(0.6, () => { show('appear', 0.3); hy.classList.add('in'); Sfx.whoosh(); });
+    at(1.6, () => caption(F.lines[0]));
+    at(2.0, () => show('speaking'));
+    at(3.9, () => { show('moving'); hy.classList.add('fly'); lineEl.classList.add('out'); if (LBF.finale3d) LBF.finale3d.fly(); Sfx.whoosh(); });      /* off to Earth */
+    at(7.0, () => Sfx.whoosh());
+    at(11.6, () => { hy.classList.remove('fly'); hy.classList.add('dip'); });                                  /* he dives at one small light on the night side */
+    at(12.0, () => { room.classList.add('in'); Sfx.rumble(); });                                               /* and there is a child, on this very website */
+    at(13.4, () => { show('appear', 0.3); hy.classList.remove('dip'); Sfx.ping(); });                         /* Hy comes out of the screen */
+    at(14.6, () => { caption(F.lines[1]); show('speaking'); });
+    at(15.6, () => { show('yes'); medal.hidden = false; medal.classList.add('fly'); Sfx.tick(); });
+    at(16.9, () => { medal.classList.add('landed'); flash(); Sfx.win(); });
+    at(17.7, () => show('speaking'));
+    at(18.2, () => caption(F.lines[2]));
+    at(21.0, () => { room.classList.remove('in'); room.classList.add('out'); medal.classList.add('pin'); lineEl.classList.add('out'); if (LBF.finale3d) LBF.finale3d.out(); Sfx.whoosh(); });   /* pull back: the room, the city, the whole Earth */
+    at(22.3, () => { show('disappear', 2.0); hy.classList.add('away'); });
+    at(23.5, () => { star.classList.add('on'); Sfx.ping(); });
+    at(24.0, () => fade.classList.add('on'));
+    at(25.0, () => { fade.classList.remove('on'); rollCredits(); });
   }
   function play() {
     if (on) return; on = true; clearAll(); resetLook();
     closeChat(); Missions.stopAll(); Voice.stop();
     document.body.classList.add('questing', 'finale-on'); box.hidden = false;
     Music.scene('m-falling'); if (LBF.finale3d) LBF.finale3d.start();
+    try { localStorage.setItem('lbf-finale', '1'); } catch (_) {}
     if (RM) return still();
     load().then(() => { if (on) scene(); });
   }
