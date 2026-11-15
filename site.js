@@ -2862,29 +2862,217 @@ function init3D() {
   })(); } catch (err) { console.warn('Quest 3 is unavailable:', err); }
   /* ══ Quest 3 end ══ */
   /* ══ Finale begin ══ */
-  /* The backdrop of the ending: Mars, then the long flight to Earth, then Earth falling away again. */
+  /* The ending, all in 3D. Hy crosses the solar system (Saturn, Jupiter, Mars), dives at Earth, flies in through the window of a
+     child who has just finished this website, hands over a medal, and shoots back out into space. One clock (real seconds) runs it. */
   (function () {
     const stage = $('#fin-stage'); if (!stage) return;
-    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(38, 1, 0.1, 600);
-    const mars = new THREE.Mesh(new THREE.SphereGeometry(2, 96, 64), globeMat(marsTex, 0xffe9dc)), earth = new THREE.Mesh(new THREE.SphereGeometry(2.3, 96, 64), globeMat(tex('earth.jpg')));
-    const E = new THREE.Vector3(0, 0, -150); earth.position.copy(E); earth.rotation.set(0.35, 3.6, 0); mars.rotation.set(0.3, 2.4, 0);
-    const sun = new THREE.DirectionalLight(0xfff4e6, 1.9); sun.position.set(-4, 2, 3);
-    scene.add(mars, earth, sun, new THREE.AmbientLight(0xffffff, 0.07));
-    const look = new THREE.Vector3(), ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x); let t = 0, on = false, flyT = -1, outT = -1, last = 0;
-    views.push({ el: stage, scene, cam, quest: true, update(dt, a) {
-      if (!on) return;
-      const now = performance.now(); dt = Math.max(dt, Math.min(0.25, (now - last) / 1000)); last = now;      /* real seconds, so a slow device keeps pace with Hy and the captions */
-      t += dt; if (flyT >= 0) flyT += dt; if (outT >= 0) outT += dt;
-      const wide = a > 1, side = wide ? 2.6 : 0.6, low = wide ? 1.1 : 2.6;          /* Mars sits low and to the left of Hy; Earth arrives dead ahead */
-      if (!RM) { mars.rotation.y += dt * 0.04; earth.rotation.y += dt * 0.03; }
-      const u = ease(flyT / 7.2), dive = ease((flyT - 7.2) / 1.6), back = outT < 0 ? 0 : outT * outT * 9;
-      /* before the flight: close to Mars. During it: an arc past Mars and across to Earth. Then a dive at the night side, and at the end a long pull back. */
-      cam.position.set(side * (1 - u) + Math.sin(u * Math.PI) * 5, low * (1 - u) + Math.sin(t * 0.3) * 0.08, 7.5 - u * (7.5 + 150 - 8.5) - dive * 5 + back);
-      look.set(0, 0, 0).lerp(E, ease(u * 2.2)); cam.lookAt(look);
-      cam.fov = 38 + Math.sin(u * Math.PI) * 16; cam.updateProjectionMatrix();          /* the view widens at full speed, so the stars seem to rush */
-      skyAdd.y = u * 1.4 + t * 0.004; skyAdd.x = Math.sin(u * Math.PI) * 0.25 - back * 0.004;
-    } });
-    LBF.finale3d = { start() { t = 0; flyT = outT = -1; on = true; }, fly() { flyT = 0; }, out() { if (flyT < 0) flyT = 99; if (outT < 0) outT = 0; }, stop() { on = false; skyAdd.x = skyAdd.y = 0; } };
+    const V = (x, y, z) => new THREE.Vector3(x, y, z), Lc = h => new THREE.Color(h).convertSRGBToLinear();
+    const clamp = (x, a, b) => x < a ? a : x > b ? b : x, lerp = (a, b, t) => a + (b - a) * t;
+    const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); }, easeOut = x => 1 - Math.pow(1 - clamp(x, 0, 1), 3), easeIn = x => Math.pow(clamp(x, 0, 1), 3);
+    const outBack = x => { x = clamp(x, 0, 1); const c = 1.70158; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+    const span = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+    const std = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: Lc(c), roughness: 0.85, metalness: 0 }, o || {}));
+    const box = (w, h, d, mat, x, y, z, parent) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); (parent || room).add(m); return m; };
+    const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t; };
+    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(40, 1, 0.05, 900);
+
+    /* ---------- the times, in seconds from the first frame (the captions in Finale use the same ones) ---------- */
+    const T = { fly: 3.0, earth: 10.4, room: 12.5, enter: 14.0, medal: 16.6, land: 18.2, leave: 21.9, space: 22.9, end: 26.2 };
+
+    /* ---------- space ---------- */
+    const space = new THREE.Group(); scene.add(space);
+    const sun = new THREE.DirectionalLight(0xfff2dd, 1.7); sun.position.set(-30, 12, 40); scene.add(sun);
+    const amb = new THREE.AmbientLight(0xffffff, 0.06); scene.add(amb);
+    const bands = (cols, spot) => canvasTex(512, 256, (g, w, h) => {
+      for (let y = 0; y < h; y++) { const k = y / h * cols.length, i = Math.floor(k) % cols.length; g.fillStyle = cols[i]; g.fillRect(0, y, w, 1); }
+      for (let i = 0; i < 900; i++) { const y = Math.random() * h; g.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '255,255,255' : '60,30,10') + ',0.05)'; g.fillRect(Math.random() * w, y, 30 + Math.random() * 120, 1 + Math.random() * 2); }
+      if (spot) { g.fillStyle = '#b5532e'; g.beginPath(); g.ellipse(w * 0.3, h * 0.62, 34, 17, 0, 0, 7); g.fill(); }
+    });
+    const saturn = new THREE.Mesh(new THREE.SphereGeometry(6, 64, 48), globeMat(bands(['#e8d7a8', '#d9c08a', '#e6d3a0', '#c9ad78', '#e3cf9c', '#d2b884', '#e9dab0', '#cdb27e'])));
+    saturn.position.set(-10, -2.5, -8); saturn.rotation.z = 0.42; space.add(saturn);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(7.6, 13.5, 128), new THREE.ShaderMaterial({ transparent: true, side: THREE.DoubleSide, depthWrite: false,
+      vertexShader: 'varying vec2 p; void main(){ p = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'varying vec2 p; void main(){ float r = length(p); float b = 0.55 + 0.45 * sin(r * 9.0) * sin(r * 3.7 + 1.0); float gap = smoothstep(10.3, 10.5, r) * (1.0 - smoothstep(10.9, 11.1, r)); gl_FragColor = vec4(vec3(0.86, 0.78, 0.60) * (0.6 + 0.4 * b), (0.35 + 0.5 * b) * (1.0 - gap)); }' }));
+    ring.rotation.x = Math.PI / 2; saturn.add(ring);
+    const jupiter = new THREE.Mesh(new THREE.SphereGeometry(7.5, 64, 48), globeMat(bands(['#d8c2a0', '#b98a5e', '#e2d2b4', '#a8754c', '#d9c4a4', '#c39a6c', '#e6d8bc', '#b0835a', '#dccaa8', '#9c6a44'], true)));
+    jupiter.position.set(34, -4, -96); space.add(jupiter);
+    const mars = new THREE.Mesh(new THREE.SphereGeometry(2.4, 64, 48), globeMat(marsTex, 0xffe9dc)); mars.position.set(-6, -1.5, -178); space.add(mars);
+    const EARTH = V(0, 0, -262), earth = new THREE.Mesh(new THREE.SphereGeometry(3.2, 96, 64), globeMat(tex('earth.jpg'))); earth.position.copy(EARTH); earth.rotation.set(0.35, 3.3, 0); space.add(earth);
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(0.85, 48, 32), globeMat(moonTex)); moon.position.set(8, 2.6, -257); space.add(moon);
+    const glowTex = canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.25, 'rgba(255,255,255,.55)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); });
+    const glow = (c, s, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: Lc(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: op == null ? 1 : op })); sp.scale.set(s, s, 1); return sp; };
+    const air = glow(0x4f9dff, 10.5, 0.5); air.position.copy(EARTH); space.add(air);
+    const sunSpot = glow(0xfff0c8, 26, 1); sunSpot.position.set(-150, 60, -40); space.add(sunSpot);
+    /* the way through: past Saturn, around Jupiter, by Mars, and up to Earth */
+    const path = new THREE.CatmullRomCurve3([V(0, 0, 0), V(8, 3, -30), V(20, 4, -70), V(22, 1, -112), V(6, -1, -150), V(0, 1.5, -182), V(3, 1, -225), V(0, 0.6, -254.5)], false, 'catmullrom', 0.5);
+
+    /* ---------- Hy, in 3D ---------- */
+    const hy = new THREE.Group(); scene.add(hy);
+    const face = new THREE.Group(); hy.add(face);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 48, 32), new THREE.ShaderMaterial({
+      vertexShader: 'varying vec3 n; varying vec3 v; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); n = normalize(normalMatrix * normal); v = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'varying vec3 n; varying vec3 v; void main(){ float f = 1.0 - max(dot(normalize(n), normalize(v)), 0.0); vec3 c = mix(vec3(1.0, 0.50, 0.10), vec3(1.0, 0.80, 0.42), pow(f, 1.6)); float hl = pow(max(dot(normalize(n), normalize(vec3(-0.45, 0.6, 0.66))), 0.0), 18.0); gl_FragColor = vec4(c + hl * 0.5, 1.0); }' }));
+    face.add(body);
+    const dark = new THREE.MeshBasicMaterial({ color: 0x2a1205 }), white = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const eyes = [-1, 1].map(s => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), dark); e.position.set(s * 0.17, 0.09, 0.455); e.scale.set(1, 1.3, 0.5); const gl = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), white); gl.position.set(0.02, 0.035, 0.06); e.add(gl); face.add(e); return e; });
+    const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 12), dark); mouth.position.set(0, -0.12, 0.46); mouth.scale.set(1.25, 0.35, 0.4); face.add(mouth);
+    const halo = glow(0xff9a3d, 3.0, 0.75); hy.add(halo);
+    const orbit = new THREE.Group(); hy.add(orbit); orbit.rotation.set(1.25, 0, 0.35);
+    orbit.add(new THREE.Mesh(new THREE.TorusGeometry(0.86, 0.012, 8, 96), new THREE.MeshBasicMaterial({ color: Lc(0xffd9a0), transparent: true, opacity: 0.85 })));
+    const electron = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), new THREE.MeshBasicMaterial({ color: Lc(0xfff1d0) })); orbit.add(electron); electron.add(glow(0xffe2b0, 0.5, 0.9));
+    const hyLight = new THREE.PointLight(0xffa24d, 0, 7, 2); hy.add(hyLight);
+    const trail = []; for (let i = 0; i < 16; i++) { const s = glow(0xff9a3d, 1, 0); scene.add(s); trail.push({ s, p: V(0, 0, 0) }); }
+    const streaks = (function () {                       /* thin lines of light that rush past while he flies */
+      const n = 90, pos = new Float32Array(n * 6), seed = []; for (let i = 0; i < n; i++) seed.push([(Math.random() - 0.5) * 30, (Math.random() - 0.5) * 18, Math.random()]);
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: Lc(0xcfe2ff), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); l.frustumCulled = false; scene.add(l);
+      return { l, pos, seed, n };
+    })();
+
+    /* ---------- the child's bedroom ---------- */
+    const room = new THREE.Group(); room.position.set(0, -1000, 0); room.visible = false; scene.add(room);
+    const wallM = std(0x27304f), floorM = std(0x4a3524), woodM = std(0x6b4a2f), darkM = std(0x1c2136);
+    box(5.2, 0.1, 4.8, floorM, 0, -0.05, 0); box(5.2, 3.2, 0.1, wallM, 0, 1.6, -2.4); box(0.1, 3.2, 4.8, wallM, -2.6, 1.6, 0); box(0.1, 3.2, 4.8, std(0x232b47), 2.6, 1.6, 0); box(5.2, 0.1, 4.8, std(0x1d2238), 0, 3.25, 0);
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(1.25, 48), std(0x7a3b3b)); rug.rotation.x = -Math.PI / 2; rug.position.set(0.5, 0.005, 0.4); room.add(rug);
+    /* the window, on the back wall: night sky, the Moon, and curtains */
+    const WIN = V(1.25, 1.75, -2.34);
+    const sky2 = canvasTex(256, 256, (g) => { const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, '#050a1f'); gr.addColorStop(1, '#152454'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); g.fillStyle = '#fff'; for (let i = 0; i < 60; i++) g.fillRect(Math.random() * 256, Math.random() * 256, 1.6, 1.6); g.fillStyle = '#e9e6d8'; g.beginPath(); g.arc(190, 64, 22, 0, 7); g.fill(); });
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.4), new THREE.MeshBasicMaterial({ map: sky2 })); pane.position.copy(WIN); room.add(pane);
+    const frameM = std(0xd9d2c2); box(1.62, 0.07, 0.08, frameM, WIN.x, WIN.y + 0.73, -2.32); box(1.62, 0.09, 0.14, frameM, WIN.x, WIN.y - 0.73, -2.3); box(0.07, 1.5, 0.08, frameM, WIN.x - 0.78, WIN.y, -2.32); box(0.07, 1.5, 0.08, frameM, WIN.x + 0.78, WIN.y, -2.32);
+    const curtM = std(0x8a4b5e); const curtL = box(0.42, 1.75, 0.06, curtM, WIN.x - 0.98, WIN.y - 0.05, -2.27), curtR = box(0.42, 1.75, 0.06, curtM, WIN.x + 0.98, WIN.y - 0.05, -2.27);
+    /* glow-in-the-dark stars and a rocket poster */
+    for (let i = 0; i < 14; i++) { const s = new THREE.Mesh(new THREE.CircleGeometry(0.035 + Math.random() * 0.03, 5), new THREE.MeshBasicMaterial({ color: Lc(0xd8f29a) })); s.position.set(-2.3 + Math.random() * 2.4, 2.2 + Math.random() * 0.8, -2.34); s.rotation.z = Math.random() * 3; room.add(s); }
+    const poster = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.95), new THREE.MeshBasicMaterial({ map: canvasTex(140, 190, (g) => { g.fillStyle = '#1a2140'; g.fillRect(0, 0, 140, 190); g.fillStyle = '#e9e6d8'; g.beginPath(); g.moveTo(70, 30); g.quadraticCurveTo(100, 80, 88, 130); g.lineTo(52, 130); g.quadraticCurveTo(40, 80, 70, 30); g.fill(); g.fillStyle = '#58d7e6'; g.beginPath(); g.arc(70, 82, 10, 0, 7); g.fill(); g.fillStyle = '#ff9a3d'; g.beginPath(); g.moveTo(52, 124); g.lineTo(36, 150); g.lineTo(58, 138); g.fill(); g.beginPath(); g.moveTo(88, 124); g.lineTo(104, 150); g.lineTo(82, 138); g.fill(); }) })); poster.position.set(-2.54, 1.9, 0.3); poster.rotation.y = Math.PI / 2; room.add(poster);
+    /* bed, against the right wall */
+    box(1.25, 0.35, 2.3, woodM, 1.9, 0.18, 1.0); box(1.2, 0.2, 2.2, std(0x3f6ad0), 1.9, 0.44, 1.0); box(0.9, 0.14, 0.5, std(0xece8dc), 1.9, 0.6, 1.85); box(1.25, 0.9, 0.08, woodM, 1.9, 0.45, 2.18);
+    /* desk, computer and chair, against the back wall on the left */
+    const DESK = V(-1.0, 0, -1.9);
+    box(1.7, 0.06, 0.8, woodM, DESK.x, 0.76, DESK.z); [[-0.78, -0.33], [0.78, -0.33], [-0.78, 0.33], [0.78, 0.33]].forEach(p => box(0.07, 0.74, 0.07, woodM, DESK.x + p[0], 0.37, DESK.z + p[1]));
+    box(0.95, 0.6, 0.05, darkM, DESK.x, 1.2, DESK.z - 0.22); box(0.1, 0.16, 0.08, darkM, DESK.x, 0.86, DESK.z - 0.22); box(0.36, 0.03, 0.2, darkM, DESK.x, 0.8, DESK.z - 0.2);
+    const screenTex = canvasTex(512, 320, (g, w, h) => { g.fillStyle = '#02030a'; g.fillRect(0, 0, w, h); g.fillStyle = '#8d8f96'; g.beginPath(); g.arc(400, 230, 120, 0, 7); g.fill(); g.fillStyle = '#74767d'; [[360, 190, 22], [440, 250, 30], [380, 280, 14]].forEach(c => { g.beginPath(); g.arc(c[0], c[1], c[2], 0, 7); g.fill(); }); g.fillStyle = '#ece8dc'; g.font = '38px "Special Elite", monospace'; g.fillText('The Left', 28, 70); g.fillText('Behind Files', 28, 114); g.fillStyle = '#4be37a'; g.font = '26px sans-serif'; g.fillText('6 of 6 quests done ✓', 28, 168); });
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.87, 0.52), new THREE.MeshBasicMaterial({ map: screenTex })); screen.position.set(DESK.x, 1.2, DESK.z - 0.19); room.add(screen);
+    box(0.5, 0.025, 0.17, std(0x2b3150), DESK.x, 0.8, DESK.z + 0.14); box(0.07, 0.03, 0.11, std(0x2b3150), DESK.x + 0.42, 0.8, DESK.z + 0.16);
+    const lamp = box(0.06, 0.34, 0.06, darkM, DESK.x - 0.68, 0.96, DESK.z - 0.15); const shade = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.16, 20, 1, true), std(0xffc46b, { emissive: Lc(0xffa24d), emissiveIntensity: 0.6, side: THREE.DoubleSide })); shade.position.set(0, 0.22, 0); lamp.add(shade);
+    const screenLight = new THREE.PointLight(0x9db8ff, 0.9, 5, 2); screenLight.position.set(DESK.x, 1.25, DESK.z + 0.25); room.add(screenLight);
+    const lampLight = new THREE.PointLight(0xffb060, 0.5, 4, 2); lampLight.position.set(DESK.x - 0.68, 1.2, DESK.z - 0.1); room.add(lampLight);
+    const moonLight = new THREE.PointLight(0x6f8cff, 0.55, 7, 2); moonLight.position.set(WIN.x, WIN.y, -1.9); room.add(moonLight);
+    const roomAmb = new THREE.HemisphereLight(0x6b7dc4, 0x2a1d14, 0.55); room.add(roomAmb);
+    /* the child, on a chair that turns */
+    const KID = V(-1.0, 0, -1.02), chair = new THREE.Group(); chair.position.copy(KID); room.add(chair);
+    box(0.46, 0.06, 0.46, darkM, 0, 0.46, 0, chair); box(0.46, 0.5, 0.06, darkM, 0, 0.74, 0.23, chair); box(0.06, 0.44, 0.06, darkM, 0, 0.22, 0, chair); box(0.5, 0.04, 0.5, darkM, 0, 0.02, 0, chair);
+    const kid = new THREE.Group(); chair.add(kid);                    /* the child faces the chair's -z, towards the desk, until Hy arrives */
+    const pj = std(0x3b6fd6), skin = std(0xe0a47c), hairM = std(0x3a2416), pantM = std(0x2b3a66);
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.44, 20), pj); torso.position.set(0, 0.74, 0); kid.add(torso);
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(0.175, 20, 14), pj); sh.position.set(0, 0.95, 0); sh.scale.set(1.08, 0.6, 1); kid.add(sh);
+    const head = new THREE.Group(); head.position.set(0, 1.17, 0); kid.add(head);
+    head.add(new THREE.Mesh(new THREE.SphereGeometry(0.175, 28, 20), skin));
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.186, 28, 20, 0, Math.PI * 2, 0, Math.PI * 0.56), hairM); hair.rotation.x = 0.28; head.add(hair);
+    const kEyes = [-1, 1].map(s => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.034, 14, 10), white); e.position.set(s * 0.066, 0.015, -0.158); const p = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), dark); p.position.set(0, 0, -0.024); e.add(p); head.add(e); return e; });
+    const kMouth = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), new THREE.MeshBasicMaterial({ color: Lc(0x7a2e2e) })); kMouth.position.set(0, -0.07, -0.162); kMouth.scale.set(1.3, 0.35, 0.5); head.add(kMouth);
+    const arms = [-1, 1].map(s => { const a = new THREE.Group(); a.position.set(s * 0.2, 0.93, 0); const u = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.42, 12), pj); u.position.set(0, -0.21, 0); a.add(u); const h = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), skin); h.position.set(0, -0.44, 0); a.add(h); kid.add(a); return a; });
+    [-1, 1].forEach(s => { const th = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.4, 12), pantM); th.rotation.x = Math.PI / 2; th.position.set(s * 0.09, 0.53, -0.2); kid.add(th); const sn = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.4, 12), pantM); sn.position.set(s * 0.09, 0.33, -0.4); kid.add(sn); const ft = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), std(0xece8dc)); ft.scale.set(0.9, 0.6, 1.5); ft.position.set(s * 0.09, 0.12, -0.44); kid.add(ft); });
+    /* the medal */
+    const medal = new THREE.Group(); room.add(medal); medal.visible = false;
+    const gold = new THREE.MeshStandardMaterial({ color: Lc(0xf5c26b), metalness: 0.85, roughness: 0.32, emissive: Lc(0x7a4a08), emissiveIntensity: 0.55 });
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.014, 40), gold); disc.rotation.x = Math.PI / 2; medal.add(disc);
+    const starShape = new THREE.Shape(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.022 : 0.052, a = -Math.PI / 2 + i * Math.PI / 5; if (i) starShape.lineTo(Math.cos(a) * r, -Math.sin(a) * r); else starShape.moveTo(Math.cos(a) * r, -Math.sin(a) * r); }
+    const star = new THREE.Mesh(new THREE.ShapeGeometry(starShape), new THREE.MeshBasicMaterial({ color: Lc(0x8a590d), side: THREE.DoubleSide })); star.position.z = 0.009; medal.add(star);
+    const rb1 = box(0.035, 0.2, 0.006, std(0xff9a3d, { emissive: Lc(0xff9a3d), emissiveIntensity: 0.25 }), -0.035, 0.17, 0, medal), rb2 = box(0.035, 0.2, 0.006, std(0x58d7e6, { emissive: Lc(0x58d7e6), emissiveIntensity: 0.25 }), 0.035, 0.17, 0, medal); rb1.rotation.z = -0.32; rb2.rotation.z = 0.32;
+    const medalGlow = glow(0xffd36b, 0.6, 0); medal.add(medalGlow);
+    const sparks = (function () { const n = 46, pos = new Float32Array(n * 3), vel = []; for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, b = Math.acos(2 * Math.random() - 1), s = 0.6 + Math.random() * 1.1; vel.push([Math.sin(b) * Math.cos(a) * s, Math.cos(b) * s + 0.4, Math.sin(b) * Math.sin(a) * s]); }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); const p = new THREE.Points(g, new THREE.PointsMaterial({ map: glowTex, color: Lc(0xffe08a), size: 0.09, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); p.frustumCulled = false; room.add(p); return { p, pos, vel, n }; })();
+
+    /* ---------- one frame ---------- */
+    const HOVER = V(0.2, 1.38, -0.55), R = room.position, tmp = V(0, 0, 0), tan = V(0, 0, 0), look = V(0, 0, 0), camP = V(0, 0, 0), up = V(0, 1, 0), from = V(0, 0, 0), to = V(0, 0, 0);
+    let t = 0, on = false, last = 0, talkUntil = 0, blinkAt = 2;
+    function setHy(p, scale, sq) { hy.position.copy(p); hy.scale.set(scale * (sq || 1), scale / (sq || 1), scale * (sq || 1)); }
+    function frame(dt, a) {
+      const now = performance.now(); dt = Math.max(dt, Math.min(0.25, (now - last) / 1000)); last = now; t += dt;
+      const wide = a > 1, inRoom = t >= T.room && t < T.space;
+      room.visible = inRoom; space.visible = !inRoom; sun.intensity = inRoom ? 0 : 1.7; amb.intensity = inRoom ? 0 : 0.06;
+      saturn.rotation.y += dt * 0.05; jupiter.rotation.y += dt * 0.07; earth.rotation.y += dt * 0.02; mars.rotation.y += dt * 0.04;
+      orbit.rotation.z += dt * 0.5; const ea = t * 3.2; electron.position.set(Math.cos(ea) * 0.86, Math.sin(ea) * 0.86, 0);
+      /* face: blink now and then, and move the mouth while he talks */
+      if (t > blinkAt) blinkAt = t + 1.6 + Math.random() * 2.4; const bl = blinkAt - t < 0.12 ? 0.12 : 1; eyes.forEach(e => { e.scale.y = 1.3 * bl; });
+      const talking = t < talkUntil; mouth.scale.set(1.25, talking ? 0.5 + 0.45 * Math.abs(Math.sin(t * 13)) : 0.35, 0.4);
+      let speed = 0, hs = 1, sq = 1, hyVis = true;
+      if (!inRoom && t < T.room) {
+        /* --- across the solar system --- */
+        const u = ease(span(t, T.fly, T.earth)) * 0.985, dive = easeIn(span(t, T.earth, T.room));
+        path.getPoint(u, tmp); path.getTangent(Math.min(u + 0.001, 1), tan);
+        if (dive > 0) { tmp.lerp(to.copy(EARTH).add(from.set(0.4, 0.5, 3.25)), dive); hs = 1 - dive * 0.7; }
+        const pop = outBack(span(t, 0.3, 1.0)), bob = Math.sin(t * 2.2) * 0.08 * (1 - span(t, T.fly, T.fly + 0.6));
+        tmp.y += bob; speed = Math.sin(span(t, T.fly, T.earth) * Math.PI);
+        sq = 1 + speed * 0.12 - (t > T.fly - 0.35 && t < T.fly ? 0.18 * Math.sin(span(t, T.fly - 0.35, T.fly) * Math.PI) : 0);      /* a little squash before he goes, a stretch at speed */
+        setHy(tmp, pop * hs, 1 / sq);
+        /* camera: face to face at first, then chasing from behind and to one side */
+        const chase = ease(span(t, T.fly - 0.2, T.fly + 1.6)), side = Math.sin(t * 0.45) * 2.2;
+        camP.copy(tmp).add(from.set(lerp(wide ? 1.3 : 0.5, 0, chase), lerp(0.25, 0, chase), lerp(wide ? 4.2 : 5.6, 0, chase)));
+        from.copy(tan).multiplyScalar(-(wide ? 6.5 : 8.5) * chase * (1 - dive * 0.55)); camP.add(from); camP.x += side * chase; camP.y += (1.3 + Math.sin(t * 0.6) * 0.5) * chase * (1 - dive * 0.6);
+        cam.position.copy(camP); look.copy(tmp).add(from.copy(tan).multiplyScalar(3 * chase)); cam.up.set(Math.sin(side * 0.06) * chase, 1, 0); cam.lookAt(look);
+        cam.fov = (wide ? 40 : 52) + speed * 22 - dive * 14;
+        skyAdd.y = u * 2.2 + t * 0.004; skyAdd.x = Math.sin(u * 6.283) * 0.2;
+      } else if (inRoom) {
+        /* --- the bedroom --- */
+        const tin = span(t, T.enter, T.enter + 1.25), out = span(t, T.leave, T.leave + 0.95), k = easeOut(tin);
+        from.copy(WIN).add(tmp.set(0, 0.1, -0.5)); to.copy(HOVER);
+        tmp.lerpVectors(from, to, k); tmp.y += Math.sin(tin * Math.PI) * 0.5;                      /* in through the window, on an arc */
+        if (out > 0) { const o = easeIn(out); tmp.lerpVectors(HOVER, from, o); tmp.y += Math.sin(o * Math.PI) * 0.35; }
+        tmp.y += Math.sin(t * 2.6) * 0.035; hyVis = t >= T.enter - 0.05;
+        sq = 1 + Math.sin(tin * Math.PI) * 0.25 + (out > 0 ? Math.sin(out * Math.PI) * 0.3 : 0) - (out > 0 && out < 0.2 ? 0.2 : 0);
+        setHy(tmp.add(R), 0.4, 1 / sq);
+        hyLight.intensity = 1.7; hyLight.distance = 7;
+        /* the child: typing, then turning round in awe, then reaching for the medal */
+        const turn = ease(span(t, T.enter + 0.25, T.enter + 1.15)), aim = Math.atan2(HOVER.x - KID.x, HOVER.z - KID.z) - Math.PI;       /* the short way round */
+        chair.rotation.y = aim * turn;                                                   /* kid looks along the chair's -z, so the chair turns until -z points at Hy */
+        const awe = ease(span(t, T.enter + 0.3, T.enter + 0.9)), joy = span(t, T.land, T.land + 1.2), hop = joy > 0 && joy < 1 ? Math.abs(Math.sin(joy * Math.PI * 3)) * 0.07 * (1 - joy) : 0;
+        kid.position.y = hop; head.rotation.x = 0.32 * awe - 0.1 * (1 - awe); head.rotation.z = Math.sin(t * 1.3) * 0.03;
+        kEyes.forEach(e => e.scale.setScalar(1 + awe * 0.45)); kMouth.scale.set(1.3 - awe * 0.3 + joy * 0.6, 0.35 + awe * 1.1 - span(t, T.land, T.land + 0.4) * 0.8, 0.5);
+        const reach = ease(span(t, T.medal + 0.5, T.land)), type = (1 - awe);
+        arms.forEach((ar, i) => { ar.rotation.x = lerp(lerp(0.25, 1.15 + Math.sin(t * 9 + i * 2) * 0.05, type), 1.9, Math.max(awe * 0.55, reach)); ar.rotation.z = (i ? -1 : 1) * lerp(0.1, 0.45, awe) * (1 - reach * 0.6); });
+        /* the medal: out of Hy, a spinning arc, onto the child's chest */
+        const mk = span(t, T.medal, T.land); medal.visible = t >= T.medal;
+        if (medal.visible) {
+          from.copy(HOVER); chair.updateMatrixWorld(); to.set(0, 0.84 + hop, -0.2).applyMatrix4(chair.matrix);       /* chest, in room coordinates */
+          tmp.lerpVectors(from, to, ease(mk)); tmp.y += Math.sin(mk * Math.PI) * 0.3; medal.position.copy(tmp);
+          const s = mk < 1 ? outBack(span(mk, 0, 0.35)) * 1.5 : 1.5 - ease(span(t, T.land, T.land + 0.5)) * 0.35; medal.scale.setScalar(s);
+          medal.rotation.y = mk < 1 ? (1 - ease(mk)) * 12.566 + chair.rotation.y + Math.PI : chair.rotation.y + Math.PI + Math.sin(t * 2) * 0.12;
+          medalGlow.material.opacity = mk < 1 ? 0.5 : Math.max(0.15, 0.9 - span(t, T.land, T.land + 0.8) * 0.75); medalGlow.scale.setScalar(mk < 1 ? 0.5 : 0.45 + (1 - span(t, T.land, T.land + 0.6)) * 0.7);
+        }
+        const sp = span(t, T.land, T.land + 1.1); sparks.p.material.opacity = sp > 0 && sp < 1 ? 1 - sp : 0;
+        if (sp > 0 && sp < 1) { for (let i = 0; i < sparks.n; i++) { const v = sparks.vel[i]; sparks.pos[i * 3] = medal.position.x + v[0] * sp * 0.9; sparks.pos[i * 3 + 1] = medal.position.y + v[1] * sp * 0.9 - sp * sp * 0.7; sparks.pos[i * 3 + 2] = medal.position.z + v[2] * sp * 0.9; } sparks.p.geometry.attributes.position.needsUpdate = true; }
+        curtL.rotation.z = Math.sin(t * 3 + 1) * 0.05 * (tin > 0 && tin < 1 || out > 0 ? 3 : 0.4); curtR.rotation.z = -curtL.rotation.z;
+        /* camera: a slow push in on the child at the screen; it swings to the window when Hy leaves */
+        const push = ease(span(t, T.room, T.enter + 1.5)), sw = ease(span(t, T.leave + 0.1, T.space));
+        camP.set(lerp(wide ? 2.05 : 1.5, wide ? 1.5 : 1.15, push), lerp(1.75, 1.5, push), lerp(wide ? 2.2 : 3.3, wide ? 1.75 : 2.9, push)).add(R);
+        look.set(lerp(-0.55, 0.9, sw), lerp(1.12, 1.6, sw), lerp(-0.85, -2.2, sw)).add(R);
+        cam.position.copy(camP); cam.up.set(0, 1, 0); cam.lookAt(look); cam.fov = (wide ? 44 : 60) - sw * 16;
+      } else {
+        /* --- back in space: Earth falls away and Hy becomes a star --- */
+        const o = span(t, T.space, T.end - 0.6), far = easeOut(o);
+        from.copy(EARTH).add(tmp.set(0.6, 0.7, 3.4)); to.copy(EARTH).add(tmp.set(-14, 9, 34)); tmp.lerpVectors(from, to, easeOut(span(o, 0, 0.8)));
+        hs = 1 - easeIn(span(o, 0.15, 0.85)) * 0.94; setHy(tmp, hs, 1 - 0.2 * Math.sin(span(o, 0, 0.5) * Math.PI)); speed = 1 - o;
+        const fl = span(o, 0.82, 1); halo.scale.setScalar(3 + Math.sin(fl * Math.PI) * 9);
+        camP.copy(EARTH).add(from.set(1.5, 1.2, lerp(6.5, 40, far))); cam.position.copy(camP); look.copy(EARTH).lerp(tmp, 0.35); cam.up.set(0, 1, 0); cam.lookAt(look); cam.fov = (wide ? 40 : 52) + (1 - far) * 14;
+        skyAdd.y = 2.2 + far * 0.3; skyAdd.x = far * 0.1; hyVis = o < 0.995;
+      }
+      if (!inRoom) { hyLight.intensity = 0; if (t < T.space) halo.scale.setScalar(3 * hs); }
+      hy.visible = hyVis; face.lookAt(cam.position); cam.updateProjectionMatrix();
+      /* trail and rushing lines */
+      const tr = inRoom ? 0.35 : speed;
+      for (let i = trail.length - 1; i > 0; i--) trail[i].p.copy(trail[i - 1].p); trail[0].p.copy(hy.position);
+      trail.forEach((q, i) => { q.s.position.copy(q.p); const f = 1 - i / trail.length; q.s.scale.setScalar(hy.scale.y * (0.5 + f * 1.4)); q.s.material.opacity = hyVis ? tr * f * 0.5 : 0; q.s.visible = i > 0; });
+      streaks.l.material.opacity = inRoom ? 0 : speed * 0.55;
+      if (!inRoom && speed > 0.02) { cam.getWorldDirection(tan); for (let i = 0; i < streaks.n; i++) { const s = streaks.seed[i]; s[2] = (s[2] + dt * (0.5 + speed * 1.6)) % 1; const z = 60 - s[2] * 70, len = 1.5 + speed * 7; tmp.set(s[0], s[1], -z).applyQuaternion(cam.quaternion).add(cam.position); from.copy(tan).multiplyScalar(len).add(tmp); streaks.pos.set([tmp.x, tmp.y, tmp.z, from.x, from.y, from.z], i * 6); } streaks.l.geometry.attributes.position.needsUpdate = true; }
+    }
+    views.push({ el: stage, scene, cam, quest: true, update(dt, a) { if (on) frame(dt, a); } });
+    LBF.finale3d = {
+      T, start() { t = 0; last = performance.now(); talkUntil = 0; on = true; trail.forEach(q => q.p.set(0, 0, 0)); },
+      talk(sec) { talkUntil = t + sec; },
+      finish() { if (t < T.end) t = T.end; },                 /* skipped: go straight to quiet space */
+      stop() { on = false; skyAdd.x = skyAdd.y = 0; },
+      peek(sec) { t = sec; }                                  /* for tests: jump to a moment */
+    };
   })();
   /* ══ Finale end ══ */
   /* render loop: one canvas, one viewport per stage */
@@ -3408,42 +3596,43 @@ const Finale = (function () {
     rollAnim.onfinish = () => { if (on) end(); };
   }
   function end() {                                  /* the last card: thank you, and two buttons */
-    clearAll(); box.classList.add('go', 'done'); hy.className = 'gone'; room.className = ''; fade.className = ''; if (LBF.finale3d) LBF.finale3d.out(); medal.hidden = false; medal.classList.add('fly', 'landed', 'pin'); lineEl.textContent = ''; credits.hidden = true; endEl.hidden = false; skip.hidden = true;
+    clearAll(); box.classList.add('go', 'done'); hy.className = 'gone'; room.className = ''; fade.className = ''; if (LBF.finale3d) LBF.finale3d.finish(); medal.hidden = false; medal.classList.add('fly', 'landed', 'pin'); lineEl.textContent = ''; credits.hidden = true; endEl.hidden = false; skip.hidden = true;
     Notebook.badge('medal'); const b = $('#fin-back'); if (b) try { b.focus({ preventScroll: true }); } catch (_) {}
   }
   function still() {                                /* for visitors who asked for less motion: the same words, the medal and the credits, standing still */
     box.classList.add('go', 'still'); medal.hidden = false; medal.classList.add('fly', 'landed'); lineEl.textContent = F.lines.join(' '); buildCredits(); credits.hidden = false; endEl.hidden = false; skip.hidden = true; Notebook.badge('medal');
   }
-  /* about 25 seconds: Mars, the flight to Earth, the child's room, the medal, and back out into space */
+  /* The film itself is drawn in 3D (see the Finale block in init3D). Here: Hy's three lines, the sounds, and the cuts. */
   function scene() {
-    box.classList.add('go');                                            /* the black bars slide in: this is a film now */
-    at(0.6, () => { show('appear', 0.3); hy.classList.add('in'); Sfx.whoosh(); });
-    at(1.6, () => caption(F.lines[0]));
-    at(2.0, () => show('speaking'));
-    at(3.9, () => { show('moving'); hy.classList.add('fly'); lineEl.classList.add('out'); if (LBF.finale3d) LBF.finale3d.fly(); Sfx.whoosh(); });      /* off to Earth */
-    at(7.0, () => Sfx.whoosh());
-    at(11.6, () => { hy.classList.remove('fly'); hy.classList.add('dip'); });                                  /* he dives at one small light on the night side */
-    at(12.0, () => { room.classList.add('in'); Sfx.rumble(); });                                               /* and there is a child, on this very website */
-    at(13.4, () => { show('appear', 0.3); hy.classList.remove('dip'); Sfx.ping(); });                         /* Hy comes out of the screen */
-    at(14.6, () => { caption(F.lines[1]); show('speaking'); });
-    at(15.6, () => { show('yes'); medal.hidden = false; medal.classList.add('fly'); Sfx.tick(); });
-    at(16.9, () => { medal.classList.add('landed'); flash(); Sfx.win(); });
-    at(17.7, () => show('speaking'));
-    at(18.2, () => caption(F.lines[2]));
-    at(21.0, () => { room.classList.remove('in'); room.classList.add('out'); medal.classList.add('pin'); lineEl.classList.add('out'); if (LBF.finale3d) LBF.finale3d.out(); Sfx.whoosh(); });   /* pull back: the room, the city, the whole Earth */
-    at(22.3, () => { show('disappear', 2.0); hy.classList.add('away'); });
-    at(23.5, () => { star.classList.add('on'); Sfx.ping(); });
-    at(24.0, () => fade.classList.add('on'));
-    at(25.0, () => { fade.classList.remove('on'); rollCredits(); });
+    const D = LBF.finale3d, T = D.T;
+    box.classList.add('go', 'x3d'); D.start();                         /* the black bars slide in: this is a film now */
+    const speak = (i, sec) => { caption(F.lines[i]); D.talk(sec); };
+    at(0.3, () => Sfx.whoosh());
+    at(1.0, () => speak(0, 1.5));
+    at(T.fly, () => { lineEl.classList.add('out'); Sfx.whoosh(); });                 /* off he goes: Saturn, Jupiter, Mars */
+    at(T.fly + 2.2, () => Sfx.whoosh());
+    at(T.fly + 4.6, () => Sfx.whoosh());
+    at(T.earth, () => Sfx.rumble());                                                 /* the dive at Earth */
+    at(T.room - 0.25, () => flash());                                                /* cut: a bedroom, and a child who has just finished this website */
+    at(T.enter, () => { Sfx.whoosh(); Sfx.ping(); });                                /* in through the window */
+    at(T.enter + 1.6, () => speak(1, 3.2));
+    at(T.medal, () => Sfx.tick());
+    at(T.land, () => { Sfx.win(); });
+    at(T.land + 1.0, () => speak(2, 2.4));
+    at(T.leave, () => { lineEl.classList.add('out'); Sfx.whoosh(); });
+    at(T.space - 0.25, () => flash());                                               /* cut: back out, and Earth falls away */
+    at(T.end - 1.6, () => Sfx.ping());
+    at(T.end - 1.0, () => fade.classList.add('on'));
+    at(T.end, () => { fade.classList.remove('on'); medal.hidden = false; medal.classList.add('fly', 'landed'); rollCredits(); });
   }
   function play() {
     if (on) return; on = true; clearAll(); resetLook();
     closeChat(); Missions.stopAll(); Voice.stop();
     document.body.classList.add('questing', 'finale-on'); box.hidden = false;
-    Music.scene('m-hour-end'); if (LBF.finale3d) LBF.finale3d.start();
+    Music.scene('m-hour-end');
     try { localStorage.setItem('lbf-finale', '1'); } catch (_) {}
-    if (RM) return still();
-    load().then(() => { if (on) scene(); });
+    if (RM || !LBF.finale3d) return still();        /* less motion, or no 3D graphics: the quiet version */
+    scene();
   }
   function close() {
     if (!on) return; on = false; clearAll(); Voice.stop(); Music.scene(null); if (LBF.finale3d) LBF.finale3d.stop();

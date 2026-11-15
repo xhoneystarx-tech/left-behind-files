@@ -826,6 +826,9 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
   body.hy-speaking #guide:not(.rest):not(.chatting):not(.away) #bubble{transform:translate(-104px,-96px);max-width:calc(100vw - 228px)}
 }
 @media (prefers-reduced-motion:reduce){#guide-btn,#bubble,#hy-dim{transition:none}}
+/* the 3D ending draws Hy, the room and the medal itself */
+#finale.x3d #fin-hy,#finale.x3d #fin-room,#finale.x3d #fin-star{display:none}
+#finale.x3d:not(.done) #fin-medal:not(.pin){display:none}
 /* v3 css end */
 </style>
 </head>
