@@ -177,6 +177,15 @@ function say(text, force, opts) {
   }, 24);
   return spoken;
 }
+/* the spotlight: on while Hy's voice plays or his line is being typed, and for a moment after, so the child can finish reading */
+(function () {
+  let until = 0;
+  setInterval(() => {
+    const now = performance.now(), b = document.body.classList;
+    if (guideState.voice || guideState.typing) until = now + 1600;
+    b.toggle('hy-speaking', now < until && !guide.classList.contains('gone') && !guide.classList.contains('away') && !b.contains('intro-on') && !b.contains('finale-on'));
+  }, 100);
+})();
 /* Enter skips whatever Hy is saying: the line appears in full and the voice stops. The intro is the one thing that cannot be skipped. */
 addEventListener('keydown', e => {
   if (e.key !== 'Enter' || document.body.classList.contains('intro-on') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;

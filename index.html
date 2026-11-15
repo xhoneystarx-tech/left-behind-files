@@ -814,6 +814,18 @@ main > section.gated,footer.gated{display:none}
 #fin-fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .9s}
 #fin-fade.on{opacity:1}
 #finale.still #fin-room,#finale.still #fin-fade{display:none}
+/* while Hy speaks, the page behind him goes dim and he grows to twice his size, so the child looks at him */
+#hy-dim{position:fixed;inset:0;z-index:29;background:rgba(0,0,0,.62);opacity:0;pointer-events:none;transition:opacity .3s}
+body.hy-speaking #hy-dim{opacity:1}
+#guide-btn{transform-origin:100% 100%;transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+#bubble{transition:opacity .25s,transform .4s cubic-bezier(.34,1.56,.64,1)}
+body.hy-speaking #guide-btn{transform:scale(2)}
+body.hy-speaking #guide:not(.rest):not(.chatting):not(.away) #bubble{transform:translate(-156px,-120px)}
+body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
+@media (max-width:760px){
+  body.hy-speaking #guide:not(.rest):not(.chatting):not(.away) #bubble{transform:translate(-104px,-96px);max-width:calc(100vw - 228px)}
+}
+@media (prefers-reduced-motion:reduce){#guide-btn,#bubble,#hy-dim{transition:none}}
 /* v3 css end */
 </style>
 </head>
@@ -1191,6 +1203,7 @@ main > section.gated,footer.gated{display:none}
   <button class="btn ghost" id="fin-skip">Skip</button>
 </div>
 <!-- finale end -->
+<div id="hy-dim" aria-hidden="true"></div>
 <div id="guide">
   <button id="guide-btn" aria-label="Hy, your guide. Open the chat."><img src="assets/buddy.jpg" alt=""></button>
   <div id="bubble" role="status">
