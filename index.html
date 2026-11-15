@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Left Behind Files</title>
+<title>Still Up There</title>
+<link rel="icon" type="image/svg+xml" href="assets/logo-site.svg">
 <meta name="description" content="A hydrogen atom detective investigates the machines NASA left on the Moon and Mars. An interactive 3D story for school-age space fans.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -829,6 +830,8 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
 /* the 3D ending draws Hy, the room and the medal itself */
 #finale.x3d #fin-hy,#finale.x3d #fin-room,#finale.x3d #fin-star{display:none}
 #finale.x3d:not(.done) #fin-medal:not(.pin){display:none}
+.brand img{border:0}
+.hero h1 .mark{display:block;width:clamp(64px,9vw,104px);height:auto;margin:0 0 18px}
 /* v3 css end */
 </style>
 </head>
@@ -845,7 +848,7 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
 </div>
 
 <header class="bar">
-  <a class="brand" href="#top"><img src="assets/logo.jpg" alt=""><span>The Left Behind Files</span></a>
+  <a class="brand" href="#top"><img src="assets/logo-site.svg" alt=""><span>Still Up There</span></a>
   <nav aria-label="Steps">
     <a href="#moon">1 Moon</a>
     <a href="#mirrors">2 Laser</a>
@@ -863,7 +866,7 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
 <section class="hero" id="top">
   <div class="stage" id="st-hero"></div>
   <div class="inner">
-    <h1>The Left Behind Files</h1>
+    <h1><img class="mark" src="assets/logo-site.svg" alt="">Still Up There</h1>
     <p class="lede">NASA left machines on the Moon and Mars. Help Hy find them.</p>
     <div class="row">
       <a class="btn big" href="#story">Start</a>
@@ -1041,7 +1044,7 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
     <details class="more"><summary>About the team and the challenge</summary><div class="about">
       <img src="assets/logo-full.jpg" alt="Quantumers team logo: an atom wearing a black fedora.">
       <dl>
-        <dt>Project</dt><dd>The Left Behind Files</dd>
+        <dt>Project</dt><dd>Still Up There</dd>
         <dt>Challenge</dt><dd>NASA Space Apps Challenge: tell the story of the hardware NASA has left across the solar system, for school-age space enthusiasts.</dd>
         <dt>Team</dt><dd>Quantumers. Kien Do, Vietnam (team owner). Making space easy and fun for kids.</dd>
         <dt>The problem</dt><dd>Sixty years of machines sit on the Moon and Mars, and most students have never heard what they are, where they are, or what they taught us.</dd>
@@ -1053,7 +1056,7 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
 </section>
 </main>
 
-<footer>The Left Behind Files. Spacecraft models, the Mars map and the star map are from NASA 3D Resources. This site is a student project and is not an official NASA website.</footer>
+<footer>Still Up There. Spacecraft models, the Mars map and the star map are from NASA 3D Resources. This site is a student project and is not an official NASA website.</footer>
 
 <div id="walk" hidden>
   <div id="walk-stage" aria-label="You are on the Moon. Walk to the light beams."></div>
@@ -1161,8 +1164,8 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
       <circle cx="960" cy="400" r="150" fill="#8d8f96"/><circle cx="915" cy="360" r="26" fill="#74767d"/><circle cx="1010" cy="430" r="38" fill="#7b7d84"/><circle cx="930" cy="470" r="18" fill="#74767d"/>
       <rect x="494" y="174" width="612" height="352" rx="6" fill="none" stroke="#02030a" stroke-width="2"/>
       <path d="M1106 250v276H810a150 150 0 0 0 296-276z" fill="#02030a" opacity="0"/>
-      <text x="530" y="262" font-family="Special Elite, monospace" font-size="50" fill="#ece8dc">The Left</text>
-      <text x="530" y="318" font-family="Special Elite, monospace" font-size="50" fill="#ece8dc">Behind Files</text>
+      <text x="530" y="262" font-family="Special Elite, monospace" font-size="50" fill="#ece8dc">Still Up</text>
+      <text x="530" y="318" font-family="Special Elite, monospace" font-size="50" fill="#ece8dc">There</text>
       <rect x="530" y="352" width="120" height="40" rx="5" fill="#ece8dc"/>
       <path d="M740 550h120l24 70H716z" fill="#262b45"/><rect x="640" y="618" width="320" height="16" rx="8" fill="#30365a"/>
       <!-- the desk -->
@@ -1196,7 +1199,7 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
   <p id="fin-line" aria-live="polite"></p>
   <div id="fin-credits" hidden><div id="fin-roll"></div></div>
   <div id="fin-end" hidden>
-    <h2>The Left Behind Files</h2>
+    <h2>Still Up There</h2>
     <p>Thank you for playing, Space Detective.</p>
     <div class="row"><button class="btn big" id="fin-back">Back to the site</button><button class="btn ghost" id="fin-again">Watch again</button></div>
   </div>

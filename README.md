@@ -1,4 +1,4 @@
-# The Left Behind Files
+# Still Up There
 
 An interactive 3D story about the hardware NASA has left on the Moon and Mars, guided by Hy, a talking hydrogen atom. Built by team Quantumers for the NASA Space Apps Challenge.
 

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Still Up There: a lander on the Moon under one orange star">
+  <defs><clipPath id="c"><circle cx="32" cy="32" r="32"/></clipPath></defs>
+  <g clip-path="url(#c)">
+    <rect width="64" height="64" fill="#0b0d18"/>
+    <g fill="#fff"><circle cx="11" cy="15" r=".9"/><circle cx="52" cy="11" r=".8"/><circle cx="46" cy="24" r=".6"/><circle cx="17" cy="27" r=".6"/><circle cx="56" cy="30" r=".7"/><circle cx="7" cy="31" r=".5"/></g>
+    <path d="M32 21.500V24" stroke="#ff9a3d" stroke-width="1.300" stroke-linecap="round" stroke-dasharray=".2 2.600"/>
+    <circle cx="32" cy="74" r="38" fill="#d9d5c8"/>
+    <g fill="#b9b5a6"><ellipse cx="15" cy="49" rx="6" ry="2.300"/><ellipse cx="47" cy="52" rx="7.500" ry="2.800"/><ellipse cx="30" cy="57" rx="4.500" ry="1.700"/></g>
+    <g stroke="#f4f1e8" stroke-width="1.700" stroke-linecap="round" fill="none"><path d="M25.500 32.500 20 37.600M38.500 32.500 44 37.600M17.600 37.900h4.800M41.600 37.900h4.800"/></g>
+    <path d="M24.500 28h15l2 5h-19z" fill="#f4f1e8"/><path d="M27.500 23.500h9V28h-9z" fill="#f5c26b"/><path d="M30 33h4l1.500 3h-7z" fill="#8f8b7e"/>
+  </g>
+  <path d="M32 3.500l2.300 6.200 6.200 2.300-6.200 2.300L32 20.500l-2.300-6.200-6.200-2.300 6.200-2.300z" fill="#ff9a3d"/>
+</svg>

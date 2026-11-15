@@ -1,4 +1,4 @@
-/* The Left Behind Files: page logic. Depends on data.js and three.js r128. */
+/* Still Up There: page logic. Depends on data.js and three.js r128. */
 (function () {
 'use strict';
 const $ = (s, r = document) => r.querySelector(s);
@@ -2949,7 +2949,7 @@ function init3D() {
     const DESK = V(-1.0, 0, -1.9);
     box(1.7, 0.06, 0.8, woodM, DESK.x, 0.76, DESK.z); [[-0.78, -0.33], [0.78, -0.33], [-0.78, 0.33], [0.78, 0.33]].forEach(p => box(0.07, 0.74, 0.07, woodM, DESK.x + p[0], 0.37, DESK.z + p[1]));
     box(0.95, 0.6, 0.05, darkM, DESK.x, 1.2, DESK.z - 0.22); box(0.1, 0.16, 0.08, darkM, DESK.x, 0.86, DESK.z - 0.22); box(0.36, 0.03, 0.2, darkM, DESK.x, 0.8, DESK.z - 0.2);
-    const screenTex = canvasTex(512, 320, (g, w, h) => { g.fillStyle = '#02030a'; g.fillRect(0, 0, w, h); g.fillStyle = '#8d8f96'; g.beginPath(); g.arc(400, 230, 120, 0, 7); g.fill(); g.fillStyle = '#74767d'; [[360, 190, 22], [440, 250, 30], [380, 280, 14]].forEach(c => { g.beginPath(); g.arc(c[0], c[1], c[2], 0, 7); g.fill(); }); g.fillStyle = '#ece8dc'; g.font = '38px "Special Elite", monospace'; g.fillText('The Left', 28, 70); g.fillText('Behind Files', 28, 114); g.fillStyle = '#4be37a'; g.font = '26px sans-serif'; g.fillText('6 of 6 quests done ✓', 28, 168); });
+    const screenTex = canvasTex(512, 320, (g, w, h) => { g.fillStyle = '#02030a'; g.fillRect(0, 0, w, h); g.fillStyle = '#8d8f96'; g.beginPath(); g.arc(400, 230, 120, 0, 7); g.fill(); g.fillStyle = '#74767d'; [[360, 190, 22], [440, 250, 30], [380, 280, 14]].forEach(c => { g.beginPath(); g.arc(c[0], c[1], c[2], 0, 7); g.fill(); }); g.fillStyle = '#ece8dc'; g.font = '38px "Special Elite", monospace'; g.fillText('Still Up', 28, 70); g.fillText('There', 28, 114); g.fillStyle = '#4be37a'; g.font = '26px sans-serif'; g.fillText('6 of 6 quests done ✓', 28, 168); });
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.87, 0.52), new THREE.MeshBasicMaterial({ map: screenTex })); screen.position.set(DESK.x, 1.2, DESK.z - 0.19); room.add(screen);
     box(0.5, 0.025, 0.17, std(0x2b3150), DESK.x, 0.8, DESK.z + 0.14); box(0.07, 0.03, 0.11, std(0x2b3150), DESK.x + 0.42, 0.8, DESK.z + 0.16);
     const lamp = box(0.06, 0.34, 0.06, darkM, DESK.x - 0.68, 0.96, DESK.z - 0.15); const shade = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.16, 20, 1, true), std(0xffc46b, { emissive: Lc(0xffa24d), emissiveIntensity: 0.6, side: THREE.DoubleSide })); shade.position.set(0, 0.22, 0); lamp.add(shade);

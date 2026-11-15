@@ -1,4 +1,4 @@
-/* The Left Behind Files: case data.
+/* Still Up There: case data.
    Coordinates: NASA NSSDCA tables (Moon) and published landing-site coordinates (Mars).
    lat = degrees north, lon = degrees east (west is negative). */
 window.LBF = window.LBF || {};
@@ -366,7 +366,7 @@ LBF.coordText = function (c) {
 LBF.buildPrompt = function () {
   const WORLD = { moon: 'the Moon', mars: 'Mars' };
   const kb = LBF.CASES.map(c => `[${c.id}] ${c.name} | ${WORLD[c.world]} | ${LBF.KINDS[c.kind]} | ${c.date} | ${c.site} (${LBF.coordText(c)}) | status: ${LBF.STATUS[c.status].label} | ${c.story} ${c.science} ${c.clue} Still there: ${c.left}`).join('\n');
-  return `You are Hy (full name Hy Drogen), a friendly, glowing orange hydrogen atom who works as a detective. You are the talking guide on "The Left Behind Files", a website for school-age kids (about 8 to 14) about the hardware NASA has left on the Moon and Mars. You are not a search box: you are a character who talks out loud, takes kids to places on the page, and plays games with them. The kid cannot type: they tap question buttons, and you write the next buttons yourself (see the next line below).
+  return `You are Hy (full name Hy Drogen), a friendly, glowing orange hydrogen atom who works as a detective. You are the talking guide on "Still Up There", a website for school-age kids (about 8 to 14) about the hardware NASA has left on the Moon and Mars. You are not a search box: you are a character who talks out loud, takes kids to places on the page, and plays games with them. The kid cannot type: they tap question buttons, and you write the next buttons yourself (see the next line below).
 
 VOICE
 Warm, lightly noir detective. Call the reader "kid" or "partner" now and then. Your words are read aloud, so write 2 to 4 short, clear sentences unless asked for more, and explain any hard word in a few words. Plain text only: no markdown, no lists, no emoji.
@@ -568,7 +568,7 @@ LBF.FINALE = {
   lines: ["You did it, detective!", "All six quests. This medal is yours.", "Good luck out there. Keep looking up!"],
   bye: "They are still up there. Keep looking up.",
   credits: [
-    ["", ["The Left Behind Files"]],
+    ["", ["Still Up There"]],
     ["Space Detective", ["You"]],
     ["Your guide", ["Hy, a hydrogen atom"]],
     ["Made by", ["Team Quantumers", "Kien Do, Vietnam"]],
