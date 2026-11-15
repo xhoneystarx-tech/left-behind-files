@@ -832,6 +832,10 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
 #finale.x3d:not(.done) #fin-medal:not(.pin){display:none}
 .brand img{border:0}
 .hero h1 .mark{display:block;width:clamp(64px,9vw,104px);height:auto;margin:0 0 18px}
+.sitemark{display:inline-flex;align-items:center;gap:.5em;font-family:var(--display);margin:0}
+.sitemark img{width:1.5em;height:1.5em;flex:none}
+#intro .sitemark{font-size:var(--s1);color:var(--chalk);margin-bottom:10px}
+#fin-roll .title img{display:block;width:clamp(64px,12vh,110px);height:auto;margin:0 auto 14px}
 /* v3 css end */
 </style>
 </head>
@@ -839,6 +843,7 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
 <canvas id="gl" aria-hidden="true"></canvas>
 
 <div id="intro" role="dialog" aria-label="Meet Hy, your guide" hidden>
+  <p class="sitemark"><img src="assets/logo-site.svg" alt="">Still Up There</p>
   <div class="who"><video id="intro-v" muted playsinline aria-hidden="true"></video></div>
   <p id="intro-line" aria-live="polite"></p>
   <div class="row">
@@ -1056,7 +1061,7 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
 </section>
 </main>
 
-<footer>Still Up There. Spacecraft models, the Mars map and the star map are from NASA 3D Resources. This site is a student project and is not an official NASA website.</footer>
+<footer><span class="sitemark"><img src="assets/logo-site.svg" alt="">Still Up There.</span> Spacecraft models, the Mars map and the star map are from NASA 3D Resources. This site is a student project and is not an official NASA website.</footer>
 
 <div id="walk" hidden>
   <div id="walk-stage" aria-label="You are on the Moon. Walk to the light beams."></div>
@@ -1199,7 +1204,7 @@ body.finale-on #hy-dim,body.intro-on #hy-dim{display:none}
   <p id="fin-line" aria-live="polite"></p>
   <div id="fin-credits" hidden><div id="fin-roll"></div></div>
   <div id="fin-end" hidden>
-    <h2>Still Up There</h2>
+    <h2 class="sitemark"><img src="assets/logo-site.svg" alt="">Still Up There</h2>
     <p>Thank you for playing, Space Detective.</p>
     <div class="row"><button class="btn big" id="fin-back">Back to the site</button><button class="btn ghost" id="fin-again">Watch again</button></div>
   </div>

@@ -3586,7 +3586,7 @@ const Finale = (function () {
     for (const k in vids) { vids[k].classList.remove('on'); vids[k].pause(); }
   }
   function buildCredits() {
-    roll.replaceChildren(...F.credits.map(([head, names], n) => el('div', { class: 'cr' + (n === 0 ? ' title' : '') }, head ? el('p', { class: 'cr-h', text: head }) : '', ...names.map(t => el('p', { class: 'cr-n', text: t })))));
+    roll.replaceChildren(...F.credits.map(([head, names], n) => el('div', { class: 'cr' + (n === 0 ? ' title' : '') }, n === 0 ? el('img', { src: 'assets/logo-site.svg', alt: '' }) : '', head ? el('p', { class: 'cr-h', text: head }) : '', ...names.map(t => el('p', { class: 'cr-n', text: t })))));
   }
   function rollCredits() {
     lineEl.classList.add('out'); medal.classList.add('pin'); credits.hidden = false; buildCredits();
